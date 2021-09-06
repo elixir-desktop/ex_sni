@@ -34,48 +34,22 @@ defmodule ExSni.Menu.Item do
 
   @spec get_layout(t(), integer(), list(String.t())) :: layout()
 
-  def get_layout(%__MODULE__{id: id, children: children} = menu_item, -1, properties) do
-    prop_values =
-      properties
-      |> Enum.map(fn property ->
-        {property, ExSni.DbusProtocol.get_property(menu_item, property)}
-      end)
-      |> Enum.filter(fn
-        {:ok, _} -> true
-        _ -> false
-      end)
-      |> Enum.map(&elem(&1, 1))
-
-    children =
-      children
-      |> Enum.map(&get_layout(&1, -1, properties))
-
-    {:dbus_variant, @dbus_menu_item_type,
-     {
-       id,
-       prop_values,
-       children
-     }}
-  end
-
   def get_layout(%__MODULE__{id: id, children: children} = menu_item, depth, properties) do
     prop_values =
       properties
       |> Enum.map(fn property ->
-        {property, ExSni.DbusProtocol.get_property(menu_item, property)}
+        case ExSni.DbusProtocol.get_property(menu_item, property) do
+          {:ok, value} -> {property, value}
+          _ -> nil
+        end
       end)
-      |> Enum.filter(fn
-        {:ok, _} -> true
-        _ -> false
-      end)
-      |> Enum.map(&elem(&1, 1))
+      |> Enum.reject(&(&1 == nil))
 
     children =
-      if depth == 0 do
-        []
-      else
-        children
-        |> Enum.map(&get_layout(&1, depth - 1, properties))
+      case depth do
+        0 -> []
+        -1 -> Enum.map(children, &get_layout(&1, -1, properties))
+        depth -> Enum.map(children, &get_layout(&1, depth - 1, properties))
       end
 
     {:dbus_variant, @dbus_menu_item_type,

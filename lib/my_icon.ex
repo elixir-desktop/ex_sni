@@ -40,5 +40,7 @@ defmodule MyIcon do
         description: "Some tooltip description here"
       }
     }
+
+    {menu, icon}
   end
 end
