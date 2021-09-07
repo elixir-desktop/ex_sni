@@ -12,20 +12,46 @@ defmodule ExSni.Menu do
           text_direction: String.t(),
           icon_theme_path: String.t(),
           status: String.t(),
-          root: list(Item.t())
+          root: Item.t()
         }
 
-  # @dbus_menu_item_type {:struct, [:int32, {:dict, :string, :variant}, {:array, :variant}]}
+  @dbus_menu_item_type {:struct, [:int32, {:dict, :string, :variant}, {:array, :variant}]}
 
-  @spec get_layout(t(), integer(), list(String.t())) :: Item.layout()
-  def get_layout(%__MODULE__{root: %Item{} = root}, depth, properties) do
-    root_layout = Item.get_layout(root, depth, properties)
-    root_layout
-    # {:ok, [:uint32, @dbus_menu_item_type], [0, root_layout]}
+  @spec get_layout(t(), integer(), list(String.t())) ::
+          {:ok, list(), list()} | {:error, binary(), binary()}
+  def get_layout(%__MODULE__{} = menu, depth, properties) do
+    get_layout(menu, 0, depth, properties)
   end
 
-  def get_layout(%__MODULE__{root: _}, _, _) do
-    {:dbus_variant, {:struct, []}, {0, [], []}}
+  @spec get_layout(t(), non_neg_integer(), integer(), list(String.t())) ::
+          {:ok, list(), list()} | {:error, binary(), binary()}
+  def get_layout(%__MODULE__{root: %Item{} = root}, 0, depth, properties) do
+    root_layout = Item.get_layout(root, depth, properties)
+    {:ok, [:uint32, @dbus_menu_item_type], [0, root_layout]}
+  end
+
+  def get_layout(%__MODULE__{root: %Item{children: children}}, parentId, depth, properties) do
+    case find_child(children, parentId) do
+      %Item{} = child ->
+        child_layout = Item.get_layout(child, depth, properties)
+        {:ok, [:uint32, @dbus_menu_item_type], [parentId, child_layout]}
+
+      _ ->
+        {:error, "Error", "No such menu item"}
+    end
+  end
+
+  @spec find_child(list(Item.t()), non_neg_integer()) :: nil | Item.t()
+  defp find_child([], _) do
+    nil
+  end
+
+  defp find_child([%Item{id: id} = item | _], id) do
+    item
+  end
+
+  defp find_child([_ | items], id) do
+    find_child(items, id)
   end
 
   defimpl ExSni.DbusProtocol do
