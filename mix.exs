@@ -25,8 +25,8 @@ defmodule ExSni.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      # {:ex_dbus, git: "https://github.com/mpotra/ex_dbus"},
-      {:ex_dbus, path: "../ex_dbus"},
+      {:ex_dbus, git: "https://github.com/mpotra/ex_dbus"},
+      # {:ex_dbus, path: "../ex_dbus"},
 
       # Development dialyzer
       {:dialyxir, "~> 1.1.0", only: [:dev, :test], runtime: false}
