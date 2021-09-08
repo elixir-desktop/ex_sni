@@ -11,10 +11,11 @@ defmodule ExSni.Menu.Item do
             toggle_state: nil,
             children: []
 
+  @type id() :: non_neg_integer()
   @type toggle_type() :: nil | :checkmark | :radio
   @type toggle_state() :: nil | :on | :off
   @type t() :: %__MODULE__{
-          id: non_neg_integer(),
+          id: id(),
           type: String.t(),
           enabled: boolean(),
           visible: boolean(),
@@ -33,7 +34,6 @@ defmodule ExSni.Menu.Item do
   @dbus_menu_item_type {:struct, [:int32, {:dict, :string, :variant}, {:array, :variant}]}
 
   @spec get_layout(t(), integer(), list(String.t())) :: layout()
-
   def get_layout(%__MODULE__{id: id, children: children} = menu_item, depth, properties) do
     prop_values =
       properties
@@ -59,6 +59,35 @@ defmodule ExSni.Menu.Item do
        children
      }}
   end
+
+  @spec find_item(t(), id()) :: nil | t()
+  def find_item(%__MODULE__{children: []}, _id) do
+    nil
+  end
+
+  def find_item(%__MODULE__{children: [%__MODULE__{id: id} = item | _]}, id) do
+    item
+  end
+
+  def find_item(%__MODULE__{children: [item | items]}, id) do
+    case find_item(item, id) do
+      nil -> find_item(%{item | children: items}, id)
+      item -> item
+    end
+  end
+
+  # @spec find_child(list(Item.t()), non_neg_integer()) :: nil | Item.t()
+  # defp find_child([], _) do
+  #   nil
+  # end
+
+  # defp find_child([%Item{id: id} = item | _], id) do
+  #   item
+  # end
+
+  # defp find_child([_ | items], id) do
+  #   find_child(items, id)
+  # end
 
   defimpl ExSni.DbusProtocol do
     def get_property(%{type: type}, "type") do
@@ -126,7 +155,31 @@ defmodule ExSni.Menu.Item do
     end
 
     def get_property(_, _) do
-      {:ok, {:dbus_variant, :string, ""}}
+      {:error, "org.freedesktop.DBus.Error.UnknownProperty", "Invalid property"}
+    end
+
+    def get_properties(item, []) do
+      get_properties(item, [
+        "type",
+        "enabled",
+        "visible",
+        "label",
+        "icon-name",
+        "icon-data",
+        "toggle-type",
+        "toggle-state",
+        "children-display"
+      ])
+    end
+
+    def get_properties(item, properties) do
+      properties
+      |> Enum.reduce([], fn property, acc ->
+        case get_property(item, property) do
+          {:ok, value} -> [{property, value} | acc]
+          _ -> acc
+        end
+      end)
     end
   end
 end

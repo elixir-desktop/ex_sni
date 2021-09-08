@@ -28,130 +28,162 @@ defmodule ExSni.Icon do
           item_is_menu: boolean(),
           window_id: integer()
         }
+end
 
-  defimpl ExSni.DbusProtocol do
-    def get_property(%{category: :application_status}, "Category") do
-      {:ok, "ApplicationStatus"}
-    end
+defimpl ExSni.DbusProtocol, for: ExSni.Icon do
+  alias ExSni.Icon.{Info, Tooltip}
 
-    def get_property(%{category: :communications}, "Category") do
-      {:ok, "Communications"}
-    end
+  def get_property(%{category: :application_status}, "Category") do
+    {:ok, "ApplicationStatus"}
+  end
 
-    def get_property(%{category: :system_services}, "Category") do
-      {:ok, "SystemServices"}
-    end
+  def get_property(%{category: :communications}, "Category") do
+    {:ok, "Communications"}
+  end
 
-    def get_property(%{category: :hardware}, "Category") do
-      {:ok, "Hardware"}
-    end
+  def get_property(%{category: :system_services}, "Category") do
+    {:ok, "SystemServices"}
+  end
 
-    def get_property(%{id: id}, "Id") do
-      {:ok, id}
-    end
+  def get_property(%{category: :hardware}, "Category") do
+    {:ok, "Hardware"}
+  end
 
-    def get_property(%{title: title}, "Title") do
-      {:ok, title}
-    end
+  def get_property(%{id: id}, "Id") do
+    {:ok, id}
+  end
 
-    def get_property(%{status: :active}, "Status") do
-      {:ok, "Active"}
-    end
+  def get_property(%{title: title}, "Title") do
+    {:ok, title}
+  end
 
-    def get_property(%{status: :passive}, "Status") do
-      {:ok, "Passive"}
-    end
+  def get_property(%{status: :active}, "Status") do
+    {:ok, "Active"}
+  end
 
-    def get_property(%{status: :needs_attention}, "Status") do
-      {:ok, "NeedsAttention"}
-    end
+  def get_property(%{status: :passive}, "Status") do
+    {:ok, "Passive"}
+  end
 
-    def get_property(%{window_id: window_id}, "WindowId") do
-      {:ok, window_id}
-    end
+  def get_property(%{status: :needs_attention}, "Status") do
+    {:ok, "NeedsAttention"}
+  end
 
-    def get_property(%{icon: %Info{name: name}}, "IconName") do
-      {:ok, name}
-    end
+  def get_property(%{window_id: window_id}, "WindowId") do
+    {:ok, window_id}
+  end
 
-    def get_property(%{overlay_icon: %Info{name: name}}, "OverlayIconName") do
-      {:ok, name}
-    end
+  def get_property(%{icon: %Info{name: name}}, "IconName") do
+    {:ok, name}
+  end
 
-    def get_property(%{attention_icon: %Info{name: name}}, "AttentionIconName") do
-      {:ok, name}
-    end
+  def get_property(%{overlay_icon: %Info{name: name}}, "OverlayIconName") do
+    {:ok, name}
+  end
 
-    def get_property(%{icon: %Info{data: {:pixmap, pixmap}}}, "IconPixmap") do
-      {:ok, pixmap}
-    end
+  def get_property(%{attention_icon: %Info{name: name}}, "AttentionIconName") do
+    {:ok, name}
+  end
 
-    def get_property(%{overlay_icon: %Info{data: {:pixmap, pixmap}}}, "OverlayIconPixmap") do
-      {:ok, pixmap}
-    end
+  def get_property(%{icon: %Info{data: {:pixmap, pixmap}}}, "IconPixmap") do
+    {:ok, pixmap}
+  end
 
-    def get_property(%{attention_icon: %Info{data: {:pixmap, pixmap}}}, "AttentionIconPixmap") do
-      {:ok, pixmap}
-    end
+  def get_property(%{overlay_icon: %Info{data: {:pixmap, pixmap}}}, "OverlayIconPixmap") do
+    {:ok, pixmap}
+  end
 
-    def get_property(%{icon: %Info{}}, "IconPixmap") do
-      {:ok, []}
-    end
+  def get_property(%{attention_icon: %Info{data: {:pixmap, pixmap}}}, "AttentionIconPixmap") do
+    {:ok, pixmap}
+  end
 
-    def get_property(%{overlay_icon: %Info{}}, "OverlayIconPixmap") do
-      {:ok, []}
-    end
+  def get_property(%{icon: %Info{}}, "IconPixmap") do
+    {:ok, []}
+  end
 
-    def get_property(%{attention_icon: %Info{}}, "AttentionIconPixmap") do
-      {:ok, []}
-    end
+  def get_property(%{overlay_icon: %Info{}}, "OverlayIconPixmap") do
+    {:ok, []}
+  end
 
-    def get_property(%{tooltip: %Tooltip{} = tooltip}, "ToolTip") do
-      name = Map.get(tooltip, :name, "")
-      # data = Map.get(tooltip, :data, [])
-      title = Map.get(tooltip, :title, "")
-      desc = Map.get(tooltip, :description, "")
+  def get_property(%{attention_icon: %Info{}}, "AttentionIconPixmap") do
+    {:ok, []}
+  end
 
-      {:ok,
-       [
-         {:dbus_variant, :string, name},
-         [],
-         {:dbus_variant, :string, title},
-         {:dbus_variant, :string, desc}
-       ]}
-    end
+  def get_property(%{tooltip: %Tooltip{} = tooltip}, "ToolTip") do
+    name = Map.get(tooltip, :name, "")
+    # data = Map.get(tooltip, :data, [])
+    title = Map.get(tooltip, :title, "")
+    desc = Map.get(tooltip, :description, "")
 
-    def get_property(_, "ToolTip") do
-      {:ok,
-       [
-         {:dbus_variant, :string, ""},
-         [],
-         {:dbus_variant, :string, ""},
-         {:dbus_variant, :string, ""}
-       ]}
-    end
+    {:ok,
+     [
+       {:dbus_variant, :string, name},
+       [],
+       {:dbus_variant, :string, title},
+       {:dbus_variant, :string, desc}
+     ]}
+  end
 
-    def get_property(_, empty_props)
-        when empty_props in [
-               "IconName",
-               "OverlayIconName",
-               "AttentionIconName",
-               "AttentionIconMovie"
-             ] do
-      {:ok, ""}
-    end
+  def get_property(_, "ToolTip") do
+    {:ok,
+     [
+       {:dbus_variant, :string, ""},
+       [],
+       {:dbus_variant, :string, ""},
+       {:dbus_variant, :string, ""}
+     ]}
+  end
 
-    def get_property(_, empty_props)
-        when empty_props in [
-               "IconPixmap",
-               "OverlayIconPixmap",
-               "AttentionIconPixmap"
-             ] do
-      {:ok, []}
-    end
+  def get_property(_, empty_props)
+      when empty_props in [
+             "IconName",
+             "OverlayIconName",
+             "AttentionIconName",
+             "AttentionIconMovie"
+           ] do
+    {:ok, ""}
+  end
 
-    def get_property(_, _) do
-      {:error, "org.freedesktop.DBus.UnknownProperty", "Invalid property"}
-    end
+  def get_property(_, empty_props)
+      when empty_props in [
+             "IconPixmap",
+             "OverlayIconPixmap",
+             "AttentionIconPixmap"
+           ] do
+    {:ok, []}
+  end
+
+  def get_property(_, _) do
+    {:error, "org.freedesktop.DBus.Error.UnknownProperty", "Invalid property"}
+  end
+
+  def get_properties(icon, []) do
+    get_properties(icon, [
+      "Id",
+      "Category",
+      "Title",
+      "Status",
+      "Menu",
+      "IconName",
+      "OverlayIconName",
+      "AttentionIconName",
+      "AttentionIconMovie",
+      "IconPixmap",
+      "OverlayIconPixmap",
+      "AttentionIconPixmap",
+      "ToolTip",
+      "ItemIsMenu",
+      "WindowId"
+    ])
+  end
+
+  def get_properties(icon, properties) do
+    properties
+    |> Enum.reduce([], fn property, acc ->
+      case get_property(icon, property) do
+        {:ok, value} -> [{property, value} | acc]
+        _ -> acc
+      end
+    end)
   end
 end
