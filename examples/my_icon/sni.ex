@@ -14,6 +14,22 @@ defmodule MyIcon do
     )
   end
 
+  def set_icon(sni_pid) do
+    {:ok, icon} = ExSni.get_icon(sni_pid)
+    icon_info = %{icon.icon | name: "document-open"}
+    icon = %{icon | icon: icon_info}
+    ExSni.set_icon(sni_pid, icon)
+
+    {:ok, service_pid} = ExSni.get_service_pid(sni_pid)
+
+    ExDBus.Service.send_signal(
+      service_pid,
+      "/StatusNotifierItem",
+      "org.kde.StatusNotifierItem",
+      "NewIcon"
+    )
+  end
+
   def setup() do
     menu = %Menu{
       root: %Item{
