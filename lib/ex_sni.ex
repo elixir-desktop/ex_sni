@@ -48,6 +48,76 @@ defmodule ExSni do
     end
   end
 
+  @spec get_menu(pid()) :: {:ok, nil | Menu.t()} | {:error, any()}
+  def get_menu(sni_pid) do
+    case get_router(sni_pid) do
+      {:ok, nil} -> {:error, "Service has no router"}
+      {:ok, %ExSni.Router{menu: menu}} -> {:ok, menu}
+      error -> error
+    end
+  end
+
+  @spec set_menu(pid(), Menu.t() | nil) :: {:ok, Menu.t() | nil} | {:error, any()}
+  def set_menu(sni_pid, menu) do
+    with {:ok, router} <- get_router(sni_pid) do
+      router =
+        router
+        |> case do
+          nil -> %ExSni.Router{menu: menu}
+          router -> %{router | menu: menu}
+        end
+
+      set_router(sni_pid, router)
+    end
+  end
+
+  @spec get_icon(pid()) :: {:ok, nil | Icon.t()} | {:error, any()}
+  def get_icon(sni_pid) do
+    case get_router(sni_pid) do
+      {:ok, nil} -> {:error, "Service has no router"}
+      {:ok, %ExSni.Router{icon: icon}} -> {:ok, icon}
+      error -> error
+    end
+  end
+
+  @spec set_icon(pid, Icon.t() | nil) :: {:ok, Icon.t() | nil} | {:error, any()}
+  def set_icon(sni_pid, icon) do
+    with {:ok, router} <- get_router(sni_pid) do
+      router =
+        router
+        |> case do
+          nil -> %ExSni.Router{icon: icon}
+          router -> %{router | icon: icon}
+        end
+
+      set_router(sni_pid, router)
+    end
+  end
+
+  defp get_router(sni_pid) do
+    with {:ok, service_pid} <- get_service_pid(sni_pid) do
+      ExDBus.Service.get_router(service_pid)
+    end
+  end
+
+  defp set_router(sni_pid, router) do
+    with {:ok, service_pid} <- get_service_pid(sni_pid) do
+      ExDBus.Service.set_router(service_pid, router)
+    end
+  end
+
+  def get_service_pid(sni_pid) do
+    sni_pid
+    |> Supervisor.which_children()
+    |> Enum.filter(&(elem(&1, 0) == ExDBus.Service))
+    |> Enum.map(&elem(&1, 1))
+    |> List.first()
+    |> case do
+      nil -> {:error, "Service not found"}
+      service_pid -> {:ok, service_pid}
+    end
+  end
+
   defp start_supervisor(service_name, router) do
     children = [
       %{
