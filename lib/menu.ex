@@ -1,13 +1,16 @@
 defmodule ExSni.Menu do
   alias ExSni.Menu.Item
+  alias ExSni.Ref
 
-  defstruct version: 1,
+  defstruct __ref__: %Ref{path: "/MenuBar", interface: "com.canonical.dbusmenu"},
+            version: 1,
             text_direction: "ltr",
             icon_theme_path: [""],
             status: "normal",
             root: %Item{}
 
   @type t() :: %__MODULE__{
+          __ref__: Ref.t() | nil,
           version: integer(),
           text_direction: String.t(),
           icon_theme_path: list(String.t()),

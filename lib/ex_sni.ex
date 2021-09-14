@@ -1,14 +1,43 @@
 defmodule ExSni do
+  use Supervisor
+
   alias ExDBus.Bus
   alias ExSni.{Icon, Menu}
 
-  def start_link(opts \\ []) do
-    with {:ok, service_name} <- get_required_name(opts),
-         {:ok, icon} <- get_required_icon(opts),
-         {:ok, menu} <- get_optional_menu(opts),
-         router <- %ExSni.Router{icon: icon, menu: menu},
-         {:ok, supervisor_pid} <- start_supervisor(service_name, router) do
-      {:ok, supervisor_pid}
+  # def start_link(opts \\ []) do
+  #   with {:ok, service_name} <- get_required_name(opts),
+  #        {:ok, icon} <- get_required_icon(opts),
+  #        {:ok, menu} <- get_optional_menu(opts),
+  #        router <- %ExSni.Router{icon: icon, menu: menu},
+  #        {:ok, supervisor_pid} <- start_supervisor(service_name, router) do
+  #     {:ok, supervisor_pid}
+  #   end
+  # end
+  def start_link(init_opts \\ [], start_opts \\ []) do
+    Supervisor.start_link(__MODULE__, init_opts, start_opts)
+  end
+
+  @impl true
+  def init(opts) do
+    with {:ok, service_name} <- get_optional_name(opts),
+         {:ok, icon} <- get_optional_icon(opts),
+         {:ok, menu} <- get_optional_menu(opts) do
+      router = %ExSni.Router{icon: icon, menu: menu}
+
+      children = [
+        %{
+          id: ExDBus.Service,
+          start:
+            {ExDBus.Service, :start_link,
+             [
+               [name: service_name, schema: ExSni.Schema, router: router],
+               []
+             ]},
+          restart: :transient
+        }
+      ]
+
+      Supervisor.init(children, strategy: :rest_for_one)
     end
   end
 
@@ -94,6 +123,16 @@ defmodule ExSni do
     end
   end
 
+  @spec register_icon(pid) :: :ok | {:error, any()}
+  def register_icon(sni_pid) do
+    with {:ok, service_pid} <- get_service_pid(sni_pid) do
+      case ExDBus.Service.get_name(service_pid) do
+        nil -> service_register_icon(service_pid, nil)
+        name when is_binary(name) -> service_register_icon(service_pid, name)
+      end
+    end
+  end
+
   defp get_router(sni_pid) do
     with {:ok, service_pid} <- get_service_pid(sni_pid) do
       ExDBus.Service.get_router(service_pid)
@@ -106,7 +145,24 @@ defmodule ExSni do
     end
   end
 
-  def get_service_pid(sni_pid) do
+  defp service_register_icon(service_pid, nil) do
+    with {:ok, dbus_pid} <- ExDBus.Service.get_dbus_pid(service_pid) do
+      service_register_icon(service_pid, dbus_pid)
+    end
+  end
+
+  defp service_register_icon(service_pid, service_name) when is_pid(service_pid) do
+    GenServer.call(service_pid, {
+      :call_method,
+      "org.kde.StatusNotifierWatcher",
+      "/StatusNotifierWatcher",
+      "org.kde.StatusNotifierWatcher",
+      "RegisterStatusNotifierItem",
+      {"s", [:string], [service_name]}
+    })
+  end
+
+  defp get_service_pid(sni_pid) do
     sni_pid
     |> Supervisor.which_children()
     |> Enum.filter(&(elem(&1, 0) == ExDBus.Service))
@@ -118,58 +174,59 @@ defmodule ExSni do
     end
   end
 
-  defp start_supervisor(service_name, router) do
-    children = [
-      %{
-        id: ExDBus.Service,
-        start:
-          {ExDBus.Service, :start_link,
-           [
-             [name: service_name, schema: ExSni.IconSchema, router: router],
-             [name: :dbus_icon_service]
-           ]},
-        restart: :transient
-      },
-      %{
-        id: ExSni.IconRegistration,
-        start:
-          {ExSni.IconRegistration, :start_link,
-           [[service_name: service_name], [name: :dbus_icon_registration]]},
-        restart: :transient
-      }
-    ]
+  # defp start_supervisor(service_name, router) do
+  #   children = [
+  #     %{
+  #       id: ExDBus.Service,
+  #       start:
+  #         {ExDBus.Service, :start_link,
+  #          [
+  #            [name: service_name, schema: ExSni.IconSchema, router: router],
+  #            [name: :dbus_icon_service]
+  #          ]},
+  #       restart: :transient
+  #     },
+  #     %{
+  #       id: ExSni.IconRegistration,
+  #       start:
+  #         {ExSni.IconRegistration, :start_link,
+  #          [[service_name: service_name], [name: :dbus_icon_registration]]},
+  #       restart: :transient
+  #     }
+  #   ]
 
-    case Supervisor.start_link(children, strategy: :rest_for_one) do
-      {:ok, pid} -> {:ok, pid}
-      {:error, {:already_started, pid}} -> {:ok, pid}
-      {:error, error} -> {:stop, error}
-    end
-  end
+  #   case Supervisor.start_link(children, strategy: :rest_for_one) do
+  #     {:ok, pid} -> {:ok, pid}
+  #     {:error, {:already_started, pid}} -> {:ok, pid}
+  #     {:error, error} -> {:stop, error}
+  #   end
+  # end
 
-  defp get_required_name(opts) when is_list(opts) do
+  defp get_optional_name(opts) when is_list(opts) do
     version = Keyword.get(opts, :version, 1)
 
     case Keyword.get(opts, :name, nil) do
-      nil -> {:stop, "No DBus service name given"}
-      "" -> {:stop, "DBus service name cannot be empty"}
+      nil -> {:ok, nil}
+      "" -> {:ok, nil}
       name when is_binary(name) -> {:ok, "#{name}-#{:os.getpid()}-#{version}"}
-      _ -> {:stop, "Given DBus name is not a string"}
+      _ -> {:stop, "Given DBus name is not a valid string"}
     end
   end
 
-  defp get_required_name(_) do
-    {:stop, "Missing required \"name\" option"}
+  defp get_optional_name(_) do
+    {:ok, nil}
   end
 
-  defp get_required_icon(opts) when is_list(opts) do
+  defp get_optional_icon(opts) when is_list(opts) do
     case Keyword.get(opts, :icon, nil) do
+      nil -> {:ok, nil}
       %Icon{} = icon -> {:ok, icon}
-      _ -> {:stop, "Required \"icon\" option must be an Icon struct"}
+      _ -> {:stop, "Invalid \"icon\" option. Not a Icon struct"}
     end
   end
 
-  defp get_required_icon(_) do
-    {:stop, "Missing required \"icon\" option"}
+  defp get_optional_icon(_) do
+    {:ok, nil}
   end
 
   defp get_optional_menu(opts) when is_list(opts) do

@@ -1,4 +1,4 @@
-defmodule ExSni.Interfaces.StatusNotifierItem do
+defmodule ExSni.Schema.StatusNotifierItem do
   use ExDBus.Schema
 
   node do

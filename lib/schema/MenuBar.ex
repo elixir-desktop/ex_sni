@@ -1,4 +1,4 @@
-defmodule ExSni.Interfaces.MenuBar do
+defmodule ExSni.Schema.MenuBar do
   use ExDBus.Schema
 
   node do

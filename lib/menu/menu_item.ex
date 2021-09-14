@@ -76,19 +76,6 @@ defmodule ExSni.Menu.Item do
     end
   end
 
-  # @spec find_child(list(Item.t()), non_neg_integer()) :: nil | Item.t()
-  # defp find_child([], _) do
-  #   nil
-  # end
-
-  # defp find_child([%Item{id: id} = item | _], id) do
-  #   item
-  # end
-
-  # defp find_child([_ | items], id) do
-  #   find_child(items, id)
-  # end
-
   defimpl ExSni.DbusProtocol do
     def get_property(%{type: type}, "type") do
       {:ok, {:dbus_variant, :string, type}}

@@ -1,7 +1,9 @@
 defmodule ExSni.Icon do
   alias ExSni.Icon.{Info, Tooltip}
+  alias ExSni.Ref
 
-  defstruct category: :application_status,
+  defstruct __ref__: %Ref{path: "/StatusNotifierItem", interface: "org.kde.StatusNotifierItem"},
+            category: :application_status,
             id: "",
             title: "",
             menu: "",
@@ -16,6 +18,7 @@ defmodule ExSni.Icon do
   @type category() :: :application_status | :communications | :system_services | :hardware
   @type status() :: :active | :passive | :needs_attention
   @type t() :: %__MODULE__{
+          __ref__: Ref.t() | nil,
           category: category(),
           id: String.t(),
           title: String.t(),

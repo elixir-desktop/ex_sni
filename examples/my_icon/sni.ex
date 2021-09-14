@@ -7,11 +7,30 @@ defmodule MyIcon do
   def start() do
     {icon, menu} = setup()
 
-    ExSni.start_link(
-      name: "org.example.MyIcon",
-      menu: menu,
-      icon: icon
-    )
+    {:ok, pid} =
+      ExSni.start_link(
+        name: "org.example.MyIcon",
+        menu: menu,
+        icon: icon
+      )
+
+    ExSni.register_icon(pid)
+    |> IO.inspect(label: "Register icon")
+
+    {:ok, pid}
+  end
+
+  def start2() do
+    {icon, menu} = setup()
+    {:ok, bus} = ExDBus.Bus.connect(:session)
+
+    {:ok, sni} =
+      ExSni.start_link(
+        name: "org.example.MyIcon",
+        menu: menu,
+        icon: icon,
+        bus: bus
+      )
   end
 
   def set_icon(sni_pid) do
@@ -19,6 +38,8 @@ defmodule MyIcon do
     icon_info = %{icon.icon | name: "document-open"}
     icon = %{icon | icon: icon_info}
     ExSni.set_icon(sni_pid, icon)
+
+    ExSni.set_property(sni_pid, :icon, "icon.name", "document-open")
 
     {:ok, service_pid} = ExSni.get_service_pid(sni_pid)
 

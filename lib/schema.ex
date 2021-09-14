@@ -1,4 +1,4 @@
-defmodule ExSni.IconSchema do
+defmodule ExSni.Schema do
   use ExDBus.Schema
 
   node do
@@ -6,12 +6,12 @@ defmodule ExSni.IconSchema do
 
     node "/MenuBar" do
       import from(ExDBus.Interfaces)
-      import from(ExSni.Interfaces.MenuBar)
+      import from(ExSni.Schema.MenuBar)
     end
 
     node "/StatusNotifierItem" do
       import from(ExDBus.Interfaces)
-      import from(ExSni.Interfaces.StatusNotifierItem)
+      import from(ExSni.Schema.StatusNotifierItem)
     end
   end
 end
