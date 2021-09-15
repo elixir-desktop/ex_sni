@@ -1,5 +1,6 @@
 defmodule ExSni.Menu.Item do
   alias ExSni.Icon.Info, as: IconInfo
+  alias ExSni.Menu
 
   defstruct id: 0,
             type: "standard",
@@ -9,7 +10,8 @@ defmodule ExSni.Menu.Item do
             icon: nil,
             toggle_type: nil,
             toggle_state: nil,
-            children: []
+            children: [],
+            callbacks: []
 
   @type id() :: non_neg_integer()
   @type toggle_type() :: nil | :checkmark | :radio
@@ -23,7 +25,8 @@ defmodule ExSni.Menu.Item do
           icon: String.t() | IconInfo.t(),
           toggle_type: toggle_type(),
           toggle_state: toggle_state(),
-          children: list(t())
+          children: list(t()),
+          callbacks: list(Menu.callback())
         }
 
   @type layout() :: {:dbus_variant, {:struct, list()}, dbus_menu_item()}

@@ -49,15 +49,16 @@ defimpl ExDBus.Router.Protocol, for: ExSni.Router do
   #   - needUpdate::boolean() - Whether this AboutToShow event
   #                   should result in the menu being updated.
   def method(
-        %{menu: %Menu{}},
+        %{menu: %Menu{} = menu},
         "/MenuBar",
         "com.canonical.dbusmenu",
         "AboutToShow",
         _signature,
-        _args,
+        id,
         _context
       ) do
-    {:ok, [:boolean], [false]}
+    ret = Menu.onAboutToShow(menu, id)
+    {:ok, [:boolean], [ret]}
   end
 
   # This is called by the applet to notify the application
@@ -74,19 +75,20 @@ defimpl ExDBus.Router.Protocol, for: ExSni.Router do
   #   - needUpdate::boolean() - Whether this AboutToShow event
   #                   should result in the menu being updated.
   def method(
-        %{menu: %Menu{}},
+        %{menu: %Menu{} = menu},
         "/MenuBar",
         "com.canonical.dbusmenu",
         "Event",
         _signature,
-        {_id, _eventId, _data, _timestamp},
+        {id, eventId, data, timestamp},
         _context
       ) do
+    Menu.onEvent(menu, eventId, id, data, timestamp)
     {:ok, [], []}
   end
 
   def method(
-        %{menu: %Icon{}},
+        %{icon: %Icon{}},
         "/StatusNotifierItem",
         "org.kde.StatusNotifierItem",
         "Activate",
@@ -98,7 +100,7 @@ defimpl ExDBus.Router.Protocol, for: ExSni.Router do
   end
 
   def method(
-        %{menu: %Icon{}},
+        %{icon: %Icon{}},
         "/StatusNotifierItem",
         "org.kde.StatusNotifierItem",
         "SecondaryActivate",
@@ -110,7 +112,7 @@ defimpl ExDBus.Router.Protocol, for: ExSni.Router do
   end
 
   def method(
-        %{menu: %Icon{}},
+        %{icon: %Icon{}},
         "/StatusNotifierItem",
         "org.kde.StatusNotifierItem",
         "Scroll",

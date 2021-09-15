@@ -1,7 +1,7 @@
 defmodule ExSni do
   use Supervisor
 
-  alias ExDBus.Bus
+  alias ExSni.Bus
   alias ExSni.{Icon, Menu}
 
   # def start_link(opts \\ []) do
@@ -47,34 +47,26 @@ defmodule ExSni do
   """
   @spec is_supported?() :: boolean()
   def is_supported?() do
-    with {:ok, bus} <- Bus.start_link(:session),
-         :ok <- Bus.connect(bus) do
-      result = is_supported?(bus)
-      Bus.close(bus)
-      result
-    else
-      _ ->
-        false
-    end
+    Bus.is_supported?()
   end
 
   @doc """
   Returns true if there is a StatusNotifierWatcher available
   on the Session Bus.
-  - bus_pid - The pid of the ExDBus.Bus GenServer
+  - sni_pid - The pid of the ExSni Supervisor
   """
   @spec is_supported?(pid()) :: boolean()
-  def is_supported?(bus_pid) do
-    if Bus.name_has_owner(bus_pid, "org.kde.StatusNotifierWatcher") do
-      Bus.has_interface?(
-        bus_pid,
-        "org.kde.StatusNotifierWatcher",
-        "/StatusNotifierWatcher",
-        "org.kde.StatusNotifierWatcher"
-      )
-    else
-      false
+  def is_supported?(sni_pid) do
+    case get_bus(sni_pid) do
+      {:ok, nil} -> {:error, "Service has no DBUS connection"}
+      {:ok, bus_pid} -> Bus.is_supported?(bus_pid)
+      error -> error
     end
+  end
+
+  @spec close(pid()) :: :ok
+  def close(sni_pid) do
+    Supervisor.stop(sni_pid)
   end
 
   @spec get_menu(pid()) :: {:ok, nil | Menu.t()} | {:error, any()}
@@ -97,6 +89,13 @@ defmodule ExSni do
         end
 
       set_router(sni_pid, router)
+    end
+  end
+
+  @spec update_menu(sni_pid :: pid(), parentId :: nil | integer(), menu :: nil | %Menu{}) :: any()
+  def update_menu(sni_pid, nil, menu) do
+    with {:ok, _} <- set_menu(sni_pid, menu) do
+      send_menu_signal(sni_pid, "LayoutUpdated", [1, 0])
     end
   end
 
@@ -130,6 +129,12 @@ defmodule ExSni do
         nil -> service_register_icon(service_pid, nil)
         name when is_binary(name) -> service_register_icon(service_pid, name)
       end
+    end
+  end
+
+  defp get_bus(sni_pid) do
+    with {:ok, service_pid} <- get_service_pid(sni_pid) do
+      ExDBus.Service.get_bus(service_pid)
     end
   end
 
@@ -201,6 +206,22 @@ defmodule ExSni do
   #     {:error, error} -> {:stop, error}
   #   end
   # end
+
+  defp send_menu_signal(sni_pid, "LayoutUpdated" = signal, args) do
+    send_signal(sni_pid, :menu, signal, {"ui", [:uint32, :int32], args})
+  end
+
+  defp send_signal(sni_pid, :menu, signal, args) do
+    with {:ok, service_pid} <- get_service_pid(sni_pid) do
+      ExDBus.Service.send_signal(
+        service_pid,
+        "/MenuBar",
+        "com.canonical.dbusmenu",
+        signal,
+        args
+      )
+    end
+  end
 
   defp get_optional_name(opts) when is_list(opts) do
     version = Keyword.get(opts, :version, 1)

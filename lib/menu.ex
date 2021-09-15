@@ -7,15 +7,19 @@ defmodule ExSni.Menu do
             text_direction: "ltr",
             icon_theme_path: [""],
             status: "normal",
-            root: %Item{}
+            root: %Item{},
+            callbacks: []
 
+  @type fn_callback() :: (... -> any())
+  @type callback() :: {atom(), fn_callback()}
   @type t() :: %__MODULE__{
           __ref__: Ref.t() | nil,
           version: integer(),
           text_direction: String.t(),
           icon_theme_path: list(String.t()),
           status: String.t(),
-          root: Item.t()
+          root: Item.t(),
+          callbacks: list(callback())
         }
 
   @dbus_menu_item_type {:struct, [:int32, {:dict, :string, :variant}, {:array, :variant}]}
@@ -50,6 +54,72 @@ defmodule ExSni.Menu do
 
   def find_item(_, _) do
     nil
+  end
+
+  @spec onAboutToShow(t(), id :: non_neg_integer()) :: boolean()
+  def onAboutToShow(%__MODULE__{callbacks: callbacks}, 0) do
+    run_aboutToShow(callbacks)
+  end
+
+  def onAboutToShow(%__MODULE__{} = menu, id) do
+    case find_item(menu, id) do
+      %Item{callbacks: callbacks} -> run_aboutToShow(callbacks)
+    end
+  end
+
+  @spec onEvent(
+          t(),
+          eventId :: String.t(),
+          menuId :: non_neg_integer(),
+          data :: any(),
+          timestamp :: any()
+        ) :: any()
+  def onEvent(%__MODULE__{callbacks: callbacks}, eventId, 0, data, timestamp) do
+    run_events(callbacks, eventId, data, timestamp)
+  end
+
+  def onEvent(%__MODULE__{} = menu, eventId, id, data, timestamp) do
+    case find_item(menu, id) do
+      %Item{callbacks: callbacks} -> run_events(callbacks, eventId, data, timestamp)
+    end
+  end
+
+  defp run_events(callbacks, eventId, data, timestamp) do
+    callbacks
+    |> get_callbacks(eventId)
+    |> Enum.reduce(nil, fn func, _ ->
+      try do
+        func.(data, timestamp)
+      rescue
+        _ -> nil
+      end
+    end)
+  end
+
+  defp run_aboutToShow(callbacks) do
+    callbacks
+    |> get_callbacks(:show)
+    |> Enum.reduce(false, fn func, acc ->
+      try do
+        func.()
+      rescue
+        _ -> acc
+      else
+        v -> v || acc
+      end
+    end)
+  end
+
+  defp get_callbacks([], _eventId) do
+    []
+  end
+
+  defp get_callbacks(callbacks, eventId) do
+    callbacks
+    |> Enum.filter(&is_tuple/1)
+    |> Enum.filter(&(elem(&1, 0) == eventId))
+    |> Enum.map(&elem(&1, 1))
+    |> Enum.filter(&is_function(&1))
   end
 
   @spec find_child(list(Item.t()), non_neg_integer()) :: nil | Item.t()
