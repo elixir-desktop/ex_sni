@@ -84,18 +84,34 @@ defmodule ExSni do
       router =
         router
         |> case do
-          nil -> %ExSni.Router{menu: menu}
-          router -> %{router | menu: menu}
+          nil ->
+            %ExSni.Router{menu: menu}
+
+          %{menu: %{version: version}} = router ->
+            %{router | menu: %{menu | version: version + 1}}
+
+          router ->
+            %{router | menu: menu}
         end
 
-      set_router(sni_pid, router)
+      case set_router(sni_pid, router) do
+        {:ok, %{menu: menu}} -> {:ok, menu}
+        error -> error
+      end
     end
   end
 
   @spec update_menu(sni_pid :: pid(), parentId :: nil | integer(), menu :: nil | %Menu{}) :: any()
   def update_menu(sni_pid, nil, menu) do
-    with {:ok, _} <- set_menu(sni_pid, menu) do
-      send_menu_signal(sni_pid, "LayoutUpdated", [1, 0])
+    with {:ok, %{version: v} = menu} <- set_menu(sni_pid, menu) do
+      send_menu_signal(sni_pid, "LayoutUpdated", [v, 0])
+
+      result = ExSni.Menu.get_group_properties(menu, :all, [])
+
+      send_menu_signal(sni_pid, "ItemsPropertiesUpdated", [
+        result,
+        []
+      ])
     end
   end
 
@@ -179,36 +195,19 @@ defmodule ExSni do
     end
   end
 
-  # defp start_supervisor(service_name, router) do
-  #   children = [
-  #     %{
-  #       id: ExDBus.Service,
-  #       start:
-  #         {ExDBus.Service, :start_link,
-  #          [
-  #            [name: service_name, schema: ExSni.IconSchema, router: router],
-  #            [name: :dbus_icon_service]
-  #          ]},
-  #       restart: :transient
-  #     },
-  #     %{
-  #       id: ExSni.IconRegistration,
-  #       start:
-  #         {ExSni.IconRegistration, :start_link,
-  #          [[service_name: service_name], [name: :dbus_icon_registration]]},
-  #       restart: :transient
-  #     }
-  #   ]
-
-  #   case Supervisor.start_link(children, strategy: :rest_for_one) do
-  #     {:ok, pid} -> {:ok, pid}
-  #     {:error, {:already_started, pid}} -> {:ok, pid}
-  #     {:error, error} -> {:stop, error}
-  #   end
-  # end
-
   defp send_menu_signal(sni_pid, "LayoutUpdated" = signal, args) do
     send_signal(sni_pid, :menu, signal, {"ui", [:uint32, :int32], args})
+  end
+
+  defp send_menu_signal(sni_pid, "ItemsPropertiesUpdated" = signal, args) do
+    send_signal(sni_pid, :menu, signal, {
+      "a(ia{sv})a(ias)",
+      [
+        {:array, {:struct, [:int32, {:dict, :string, :variant}]}},
+        {:array, {:struct, [:int32, {:array, :string}]}}
+      ],
+      args
+    })
   end
 
   defp send_signal(sni_pid, :menu, signal, args) do

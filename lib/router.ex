@@ -27,14 +27,7 @@ defimpl ExDBus.Router.Protocol, for: ExSni.Router do
         {ids, properties},
         _context
       ) do
-    result =
-      ids
-      |> Enum.map(&Menu.find_item(menu, &1))
-      |> Enum.reject(&(&1 == nil))
-      |> Enum.map(fn item ->
-        values = ExSni.DbusProtocol.get_properties(item, properties)
-        [item.id, values]
-      end)
+    result = Menu.get_group_properties(menu, ids, properties)
 
     {:ok, [{:array, {:struct, [:int32, {:dict, :string, :variant}]}}], [result]}
   end

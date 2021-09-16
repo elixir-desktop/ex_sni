@@ -32,9 +32,9 @@ defmodule ExSni.Menu do
 
   @spec get_layout(t(), non_neg_integer(), integer(), list(String.t())) ::
           {:ok, list(), list()} | {:error, binary(), binary()}
-  def get_layout(%__MODULE__{root: %Item{} = root}, 0, depth, properties) do
+  def get_layout(%__MODULE__{root: %Item{} = root, version: version}, 0, depth, properties) do
     {_, _, root_layout} = Item.get_layout(root, depth, properties)
-    {:ok, [:uint32, @dbus_menu_item_type], [0, root_layout]}
+    {:ok, [:uint32, @dbus_menu_item_type], [version, root_layout]}
   end
 
   def get_layout(%__MODULE__{root: %Item{children: children}}, parentId, depth, properties) do
@@ -46,6 +46,44 @@ defmodule ExSni.Menu do
       _ ->
         {:error, "org.freedesktop.DBus.Error.Failed", "No such menu item"}
     end
+  end
+
+  def get_group_properties(%__MODULE__{} = menu, :all, properties) do
+    ids =
+      menu
+      |> get_children()
+      |> Enum.map(&Map.get(&1, :id))
+
+    get_group_properties(menu, ids, properties)
+  end
+
+  def get_group_properties(%__MODULE__{} = menu, ids, properties) do
+    ids
+    |> Enum.map(&find_item(menu, &1))
+    |> Enum.reject(&(&1 == nil))
+    |> Enum.map(fn item ->
+      values = ExSni.DbusProtocol.get_properties(item, properties)
+      [item.id, values]
+    end)
+  end
+
+  defp get_children(%__MODULE__{root: %{} = root}) do
+    get_children(root)
+  end
+
+  defp get_children(%{children: []}) do
+    []
+  end
+
+  defp get_children(%{children: children}) when is_list(children) do
+    Enum.reduce(children, [], fn child, acc ->
+      children = get_children(child)
+      [child | children] ++ acc
+    end)
+  end
+
+  defp get_children(_) do
+    []
   end
 
   def find_item(%__MODULE__{root: %Item{} = root}, id) do
