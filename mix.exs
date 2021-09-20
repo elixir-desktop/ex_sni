@@ -28,7 +28,7 @@ defmodule ExSni.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:ex_dbus, git: "https://github.com/mpotra/ex_dbus"},
+      {:ex_dbus, github: "mpotra/ex_dbus"},
       # Development dialyzer
       {:dialyxir, "~> 1.1.0", only: [:dev, :test], runtime: false}
     ]
@@ -40,7 +40,7 @@ defmodule ExSni.MixProject do
       files: ["lib", "mix.exs"],
       maintainers: ["Mihai Potra"],
       licenses: ["MIT"],
-      links: %{"Github" => "https://github.com/elixir-desktop/ex_sni"}
+      links: %{"GitHub" => "https://github.com/elixir-desktop/ex_sni"}
     ]
   end
 end
