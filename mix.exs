@@ -4,11 +4,14 @@ defmodule ExSni.MixProject do
   def project do
     [
       app: :ex_sni,
+      name: "ExSNI",
+      source_url: "https://github.com/elixir-desktop/ex_sni",
       version: "0.1.0",
       elixir: "~> 1.10",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      deps: deps(),
+      package: package()
     ]
   end
 
@@ -26,9 +29,18 @@ defmodule ExSni.MixProject do
   defp deps do
     [
       {:ex_dbus, git: "https://github.com/mpotra/ex_dbus"},
-
       # Development dialyzer
       {:dialyxir, "~> 1.1.0", only: [:dev, :test], runtime: false}
+    ]
+  end
+
+  def package do
+    [
+      name: :ex_sni,
+      files: ["lib", "mix.exs"],
+      maintainers: ["Mihai Potra"],
+      licenses: ["MIT"],
+      links: %{"Github" => "https://github.com/elixir-desktop/ex_sni"}
     ]
   end
 end

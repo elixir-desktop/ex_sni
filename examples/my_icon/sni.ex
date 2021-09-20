@@ -1,58 +1,39 @@
 defmodule MyIcon do
+  @moduledoc """
+  ```
+    {:ok, pid} = MyIcon.start()
+    # Change the icon
+    MyIcon.change_icon(pid)
+  ```
+  """
   alias ExSni.Icon
   alias ExSni.Icon.{Info, Tooltip}
   alias ExSni.Menu
   alias ExSni.Menu.Item
 
   def start() do
-    {icon, menu} = setup()
-
-    {:ok, pid} =
-      ExSni.start_link(
-        name: "org.example.MyIcon",
-        menu: menu,
-        icon: icon
-      )
-
-    ExSni.register_icon(pid)
-    |> IO.inspect(label: "Register icon")
-
-    {:ok, pid}
+    with {:ok, pid} <-
+           ExSni.start_link(
+             name: "org.example.MyIcon",
+             menu: create_menu(),
+             icon: create_icon()
+           ),
+         {:ok, _} <- ExSni.register_icon(pid) do
+      {:ok, pid}
+    end
   end
 
-  def start2() do
-    {icon, menu} = setup()
-    {:ok, bus} = ExDBus.Bus.connect(:session)
-
-    {:ok, sni} =
-      ExSni.start_link(
-        name: "org.example.MyIcon",
-        menu: menu,
-        icon: icon,
-        bus: bus
-      )
-  end
-
-  def set_icon(sni_pid) do
+  def change_icon(sni_pid) do
     {:ok, icon} = ExSni.get_icon(sni_pid)
     icon_info = %{icon.icon | name: "document-open"}
     icon = %{icon | icon: icon_info}
     ExSni.set_icon(sni_pid, icon)
 
-    ExSni.set_property(sni_pid, :icon, "icon.name", "document-open")
-
-    {:ok, service_pid} = ExSni.get_service_pid(sni_pid)
-
-    ExDBus.Service.send_signal(
-      service_pid,
-      "/StatusNotifierItem",
-      "org.kde.StatusNotifierItem",
-      "NewIcon"
-    )
+    ExSni.register_icon(sni_pid)
   end
 
-  def setup() do
-    menu = %Menu{
+  def create_menu() do
+    %Menu{
       root: %Item{
         id: 0,
         children: [
@@ -71,8 +52,10 @@ defmodule MyIcon do
         ]
       }
     }
+  end
 
-    icon = %Icon{
+  def create_icon() do
+    %Icon{
       category: :application_status,
       id: "1",
       title: "Test_Icon",
@@ -87,7 +70,5 @@ defmodule MyIcon do
         description: "Some tooltip description here"
       }
     }
-
-    {icon, menu}
   end
 end
