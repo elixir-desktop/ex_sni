@@ -72,7 +72,6 @@ defmodule ExSni do
   @spec get_menu(pid()) :: {:ok, nil | Menu.t()} | {:error, any()}
   def get_menu(sni_pid) do
     case get_router(sni_pid) do
-      {:ok, nil} -> {:error, "Service has no router"}
       {:ok, %ExSni.Router{menu: menu}} -> {:ok, menu}
       error -> error
     end
@@ -81,18 +80,14 @@ defmodule ExSni do
   @spec set_menu(pid(), Menu.t() | nil) :: {:ok, Menu.t() | nil} | {:error, any()}
   def set_menu(sni_pid, menu) do
     with {:ok, router} <- get_router(sni_pid) do
-      router =
-        router
-        |> case do
-          nil ->
-            %ExSni.Router{menu: menu}
-
-          %{menu: %{version: version}} = router ->
-            %{router | menu: %{menu | version: version + 1}}
-
-          router ->
-            %{router | menu: menu}
+      version =
+        case router do
+          %{menu: %{version: version}} -> version + 1
+          _ -> 1
         end
+
+      # Set menu with version in router
+      router = %{router | menu: %{menu | version: version}}
 
       case set_router(sni_pid, router) do
         {:ok, %{menu: menu}} -> {:ok, menu}
@@ -121,39 +116,69 @@ defmodule ExSni do
         # No properties removed (empty array)
         []
       ])
+
+      {:ok, menu}
     end
   end
 
   @spec get_icon(pid()) :: {:ok, nil | Icon.t()} | {:error, any()}
   def get_icon(sni_pid) do
     case get_router(sni_pid) do
-      {:ok, nil} -> {:error, "Service has no router"}
       {:ok, %ExSni.Router{icon: icon}} -> {:ok, icon}
       error -> error
     end
   end
 
-  @spec set_icon(pid, Icon.t() | nil) :: {:ok, Icon.t() | nil} | {:error, any()}
-  def set_icon(sni_pid, icon) do
-    with {:ok, router} <- get_router(sni_pid) do
-      router =
-        router
-        |> case do
-          nil -> %ExSni.Router{icon: icon}
-          router -> %{router | icon: icon}
-        end
+  @spec set_icon(pid, Icon.t() | nil, keyword()) :: {:ok, Icon.t() | nil} | {:error, any()}
+  def set_icon(sni_pid, icon, opts \\ []) do
+    with {:ok, service_pid} <- get_service_pid(sni_pid),
+         {:ok, router} <- get_service_router(service_pid),
+         {:ok, %{icon: icon} = router} <- set_service_router(service_pid, %{router | icon: icon}) do
+      if Keyword.get(opts, :register, true) == true and icon != nil do
+        register_router_icon(service_pid, router)
+      else
+        {:ok, icon}
+      end
+    end
+  end
 
-      set_router(sni_pid, router)
+  @spec update_icon(sni_pid :: pid(), icon :: nil | %Icon{}) :: any()
+  def update_icon(sni_pid, icon) do
+    with {:ok, icon} <- set_icon(sni_pid, icon) do
+      send_icon_signal(sni_pid, "NewIcon")
+      {:ok, icon}
     end
   end
 
   @spec register_icon(pid) :: :ok | {:error, any()}
   def register_icon(sni_pid) do
-    with {:ok, service_pid} <- get_service_pid(sni_pid) do
-      case ExDBus.Service.get_name(service_pid) do
-        nil -> service_register_icon(service_pid, nil)
-        name when is_binary(name) -> service_register_icon(service_pid, name)
-      end
+    with {:ok, service_pid} <- get_service_pid(sni_pid),
+         {:ok, router} <- get_service_router(service_pid),
+         {:ok, _} <- register_router_icon(service_pid, router) do
+      :ok
+    end
+  end
+
+  defp register_router_icon(_, %{icon: %Icon{} = icon, icon_registered: true}) do
+    {:ok, icon}
+  end
+
+  defp register_router_icon(service_pid, %{icon: %Icon{}, icon_registered: false} = router) do
+    with {:ok, _} <- register_icon_on_service(service_pid),
+         {:ok, %{icon: icon}} <-
+           set_service_router(service_pid, %{router | icon_registered: true}) do
+      {:ok, icon}
+    end
+  end
+
+  defp register_router_icon(_, _) do
+    {:error, "Cannot register nil icon"}
+  end
+
+  defp register_icon_on_service(service_pid) do
+    case ExDBus.Service.get_name(service_pid) do
+      nil -> service_register_icon(service_pid, nil)
+      name when is_binary(name) -> service_register_icon(service_pid, name)
     end
   end
 
@@ -165,14 +190,25 @@ defmodule ExSni do
 
   defp get_router(sni_pid) do
     with {:ok, service_pid} <- get_service_pid(sni_pid) do
-      ExDBus.Service.get_router(service_pid)
+      get_service_router(service_pid)
+    end
+  end
+
+  defp get_service_router(service_pid) do
+    case ExDBus.Service.get_router(service_pid) do
+      {:ok, nil} -> {:ok, %ExSni.Router{}}
+      ret -> ret
     end
   end
 
   defp set_router(sni_pid, router) do
     with {:ok, service_pid} <- get_service_pid(sni_pid) do
-      ExDBus.Service.set_router(service_pid, router)
+      set_service_router(service_pid, router)
     end
+  end
+
+  defp set_service_router(service_pid, router) do
+    ExDBus.Service.set_router(service_pid, router)
   end
 
   defp service_register_icon(service_pid, nil) do
@@ -219,12 +255,29 @@ defmodule ExSni do
     })
   end
 
+  defp send_icon_signal(sni_pid, signal)
+       when signal in ["NewTitle", "NewIcon", "NewAttentionIcon", "NewOverlayIcon", "NewToolTip"] do
+    send_signal(sni_pid, :icon, signal, {"", [], []})
+  end
+
   defp send_signal(sni_pid, :menu, signal, args) do
     with {:ok, service_pid} <- get_service_pid(sni_pid) do
       ExDBus.Service.send_signal(
         service_pid,
         "/MenuBar",
         "com.canonical.dbusmenu",
+        signal,
+        args
+      )
+    end
+  end
+
+  defp send_signal(sni_pid, :icon, signal, args) do
+    with {:ok, service_pid} <- get_service_pid(sni_pid) do
+      ExDBus.Service.send_signal(
+        service_pid,
+        "/StatusNotifierItem",
+        "org.kde.StatusNotifierItem",
         signal,
         args
       )

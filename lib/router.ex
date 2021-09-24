@@ -1,5 +1,6 @@
 defmodule ExSni.Router do
   defstruct icon: nil,
+            icon_registered: false,
             menu: nil
 end
 
