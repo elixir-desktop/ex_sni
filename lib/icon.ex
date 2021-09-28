@@ -6,7 +6,8 @@ defmodule ExSni.Icon do
             category: :application_status,
             id: "",
             title: "",
-            menu: "",
+            menu: "/NO_DBUSMENU",
+            theme_path: "",
             status: :active,
             icon: nil,
             overlay_icon: nil,
@@ -23,6 +24,7 @@ defmodule ExSni.Icon do
           id: String.t(),
           title: String.t(),
           menu: String.t(),
+          theme_path: String.t(),
           status: status(),
           icon: Info.t() | nil,
           overlay_icon: Info.t() | nil,
@@ -76,6 +78,22 @@ defimpl ExSni.DbusProtocol, for: ExSni.Icon do
     {:ok, window_id}
   end
 
+  def get_property(%{item_is_menu: value}, "ItemIsMenu") do
+    {:ok, value}
+  end
+
+  def get_property(%{menu: nil}, "Menu") do
+    {:ok, "/NO_DBUSMENU"}
+  end
+
+  def get_property(%{menu: menu}, "Menu") when is_binary(menu) do
+    {:ok, menu}
+  end
+
+  def get_property(%{theme_path: path}, "IconThemePath") do
+    {:ok, path}
+  end
+
   def get_property(%{icon: %Info{name: name}}, "IconName") do
     {:ok, name}
   end
@@ -101,15 +119,15 @@ defimpl ExSni.DbusProtocol, for: ExSni.Icon do
   end
 
   def get_property(%{icon: %Info{}}, "IconPixmap") do
-    {:ok, []}
+    :skip
   end
 
   def get_property(%{overlay_icon: %Info{}}, "OverlayIconPixmap") do
-    {:ok, []}
+    :skip
   end
 
   def get_property(%{attention_icon: %Info{}}, "AttentionIconPixmap") do
-    {:ok, []}
+    :skip
   end
 
   def get_property(%{tooltip: %Tooltip{} = tooltip}, "ToolTip") do
