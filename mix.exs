@@ -1,15 +1,18 @@
 defmodule ExSni.MixProject do
   use Mix.Project
 
+  @source_url "https://github.com/elixir-desktop/ex_sni"
+
   def project do
     [
       app: :ex_sni,
       name: "ExSNI",
-      source_url: "https://github.com/elixir-desktop/ex_sni",
+      source_url: @source_url,
       version: "0.1.0",
       elixir: "~> 1.10",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
+      description: "Elixir implementation of D-Bus StatusNotifierItem and com.canonical.dbusmenu",
       deps: deps(),
       package: package()
     ]
@@ -28,7 +31,7 @@ defmodule ExSni.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:ex_dbus, github: "mpotra/ex_dbus"},
+      {:ex_dbus, "~> 0.1.0"},
       # Development dialyzer
       {:dialyxir, "~> 1.1.0", only: [:dev, :test], runtime: false}
     ]
@@ -37,10 +40,10 @@ defmodule ExSni.MixProject do
   def package do
     [
       name: :ex_sni,
-      files: ["lib", "mix.exs"],
+      files: ~w(lib LICENSE mix.exs README.md),
       maintainers: ["Mihai Potra"],
       licenses: ["MIT"],
-      links: %{"GitHub" => "https://github.com/elixir-desktop/ex_sni"}
+      links: %{"GitHub" => @source_url}
     ]
   end
 end
