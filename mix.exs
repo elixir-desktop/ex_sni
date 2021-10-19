@@ -8,7 +8,7 @@ defmodule ExSni.MixProject do
       app: :ex_sni,
       name: "ExSNI",
       source_url: @source_url,
-      version: "0.1.0",
+      version: "0.1.1",
       elixir: "~> 1.10",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
@@ -31,7 +31,7 @@ defmodule ExSni.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:ex_dbus, "~> 0.1.0"},
+      {:ex_dbus, "~> 0.1.1"},
       # Development dialyzer
       {:dialyxir, "~> 1.1.0", only: [:dev, :test], runtime: false}
     ]
