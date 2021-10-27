@@ -3,28 +3,33 @@ defmodule ExSni.Menu.Item do
   alias ExSni.Menu
 
   defstruct id: 0,
-            type: "standard",
+            # type: "standard",
+            type: :standard,
             enabled: true,
             visible: true,
             label: "",
             icon: nil,
-            toggle_type: nil,
-            toggle_state: nil,
+            # toggle_type: nil,
+            # toggle_state: nil,
+            checked: false,
             children: [],
             callbacks: []
 
   @type id() :: non_neg_integer()
+  @type item_type() :: :separator | :root | :standard | :checkbox | :radio | :menu
   @type toggle_type() :: nil | :checkmark | :radio
   @type toggle_state() :: nil | :on | :off
   @type t() :: %__MODULE__{
           id: id(),
-          type: String.t(),
+          # type: String.t(),
+          type: item_type(),
           enabled: boolean(),
           visible: boolean(),
           label: String.t(),
-          icon: String.t() | IconInfo.t(),
-          toggle_type: toggle_type(),
-          toggle_state: toggle_state(),
+          icon: nil | String.t() | IconInfo.t(),
+          # toggle_type: toggle_type(),
+          # toggle_state: toggle_state(),
+          checked: boolean(),
           children: list(t()),
           callbacks: list(Menu.callback())
         }
@@ -35,6 +40,129 @@ defmodule ExSni.Menu.Item do
   @type dbus_menu_item() :: {integer(), dbus_menu_properties(), list(dbus_menu_item())}
 
   @dbus_menu_item_type {:struct, [:int32, {:dict, :string, :variant}, {:array, :variant}]}
+
+  @spec separator() :: t()
+  def separator() do
+    %__MODULE__{id: 1, type: :separator}
+  end
+
+  @spec root(children :: list(t())) :: t()
+  def root(children \\ []) do
+    %__MODULE__{id: 0, type: :root, children: children}
+  end
+
+  @spec menu(children :: list(t())) :: t()
+  def menu(children \\ []) do
+    %__MODULE__{type: :menu, children: children}
+  end
+
+  @spec checkbox() :: t()
+  def checkbox(label \\ "") do
+    %__MODULE__{type: :checkbox}
+    |> set_label(label)
+  end
+
+  @spec radio() :: t()
+  def radio(label \\ "") do
+    %__MODULE__{type: :radio}
+    |> set_label(label)
+  end
+
+  @spec standard(label :: String.t()) :: t()
+  def standard(label \\ "") do
+    %__MODULE__{type: :standard}
+    |> set_label(label)
+  end
+
+  @spec set_id(t(), id :: id()) :: t()
+  def set_id(%__MODULE__{type: type} = item, id) when type not in [:root, :separator] do
+    %{item | id: id}
+  end
+
+  def set_id(%__MODULE__{} = item, _) do
+    item
+  end
+
+  @spec set_label(t(), label :: String.t()) :: t()
+  def set_label(%__MODULE__{type: type} = item, label) when type not in [:separator] and is_binary(label) do
+    %{item | label: label}
+  end
+
+  def set_label(item, _) do
+    item
+  end
+
+  @spec set_callbacks(t(), callbacks :: list(Menu.callback())) :: t()
+  def set_callbacks(%__MODULE__{} = item, callbacks) do
+    %{item | callbacks: callbacks}
+  end
+
+  @spec enable(t()) :: t()
+  def enable(%__MODULE__{} = item) do
+    set_enabled(item, true)
+  end
+
+  @spec disable(t()) :: t()
+  def disable(%__MODULE__{} = item) do
+    set_enabled(item, false)
+  end
+
+  @spec toggle_enabled(t()) :: t()
+  def toggle_enabled(%__MODULE__{enabled: true} = item) do
+    set_enabled(item, false)
+  end
+
+  def toggle_enabled(%__MODULE__{enabled: false} = item) do
+    set_enabled(item, true)
+  end
+
+  @spec set_enabled(t(), value :: boolean()) :: t()
+  def set_enabled(%__MODULE__{} = item, value) when is_boolean(value) do
+    %{item | enabled: value}
+  end
+
+  @spec visible(t()) :: t()
+  def visible(%__MODULE__{} = item) do
+    set_visible(item, true)
+  end
+
+  @spec hidden(t()) :: t()
+  def hidden(%__MODULE__{} = item) do
+    set_visible(item, false)
+  end
+
+  @spec toggle_visible(t()) :: t()
+  def toggle_visible(%__MODULE__{visible: true} = item) do
+    set_visible(item, false)
+  end
+
+  def toggle_visible(%__MODULE__{visible: false} = item) do
+    set_visible(item, true)
+  end
+
+  @spec set_visible(t(), value :: boolean()) :: t()
+  def set_visible(%__MODULE__{} = item, value) when is_boolean(value) do
+    %{item | visible: value}
+  end
+
+  @spec set_checked(t(), new_state :: boolean()) :: t()
+  def set_checked(item, value \\ true)
+  def set_checked(%__MODULE__{type: type} = item, value) when type in [:checkbox, :radio] and is_boolean(value) do
+    %{item | checked: value}
+  end
+
+  def set_checked(item, _) do
+    item
+  end
+
+  @spec toggle_checked(t()) :: t()
+  def toggle_checked(%__MODULE__{checked: true} = item) do
+    set_checked(item, false)
+  end
+
+  def toggle_checked(%__MODULE__{checked: false} = item) do
+    set_checked(item, true)
+  end
 
   @spec get_layout(t(), integer(), list(String.t())) :: layout()
   def get_layout(%__MODULE__{id: id, children: children} = menu_item, depth, properties) do
@@ -79,29 +207,128 @@ defmodule ExSni.Menu.Item do
     end
   end
 
+  @spec compare(current :: t(), other :: t()) :: :equal | {:changes, :id} | {:error, String.t()}
+  def compare(%__MODULE__{id: id} = current, %__MODULE__{id: id} = other) do
+    # Same ID. Compare properties
+    case get_changed_properties(current, other) do
+      [] -> :equal
+      changes -> {:changes, changes}
+    end
+  end
+
+  def compare(%__MODULE__{}, %__MODULE__{}) do
+    {:error, "The nodes have different IDs"}
+  end
+
+  # This does not check for :id property
+  @spec get_changed_properties(current :: t(), other:: t(), properties :: list(atom())) :: list(atom())
+  def get_changed_properties(%__MODULE__{} = current, %__MODULE__{} = other) do
+    get_changed_properties(current, other, [:type, :label, :enabled, :visible, :toggle_type, :toggle_state, :icon, :children])
+  end
+
+  def get_changed_properties(%__MODULE__{}, %__MODULE__{}, []) do
+    []
+  end
+
+  def get_changed_properties(%__MODULE__{} = current, %__MODULE__{} = other, [property | properties]) do
+    if equal_property?(current, other, property) do
+      get_changed_properties(current, other, properties)
+    else
+      [property | get_changed_properties(current, other, properties)]
+    end
+  end
+
+  def equal_property?(%__MODULE__{children: []}, %__MODULE__{children: []}, :children) do
+    true
+  end
+
+  def equal_property?(%__MODULE__{children: current_children}, %__MODULE__{children: other_children}, :children) do
+    Enum.count(current_children) == Enum.count(other_children)
+  end
+
+  def equal_property?(%__MODULE__{} = current, %__MODULE__{} = other, property) do
+    IO.inspect({property, [Map.get(current, property), Map.get(other, property)]}, label: "equal_property?/3")
+    Map.get(current, property) == Map.get(other, property)
+  end
+
   defimpl ExSni.DbusProtocol do
-    def get_property(%{type: type}, "type") do
-      {:ok, {:dbus_variant, :string, type}}
+    def get_property(%{type: :separator}, "type") do
+      ok_dbus_variant(:string, "separator")
+    end
+
+    def get_property(%{type: _}, "type") do
+      default("standard")
+    end
+
+    # def get_property(%{type: "standard"}, "type") do
+    #   default("standard"}
+    # end
+
+    # def get_property(%{type: type}, "type") do
+    #   {:ok, {:dbus_variant, :string, type}}
+    # end
+
+    def get_property(%{enabled: true}, "enabled") do
+      # {:default, true}
+      default(true)
     end
 
     def get_property(%{enabled: enabled}, "enabled") do
-      {:ok, {:dbus_variant, :boolean, enabled}}
+      # {:ok, {:dbus_variant, :boolean, enabled}}
+      ok_dbus_variant(:boolean, enabled)
+    end
+
+    def get_property(%{visible: true}, "visible") do
+      # {:default, true}
+      default(true)
     end
 
     def get_property(%{visible: visible}, "visible") do
-      {:ok, {:dbus_variant, :boolean, visible}}
+      # {:ok, {:dbus_variant, :boolean, visible}}
+      ok_dbus_variant(:boolean, visible)
+    end
+
+    def get_property(%{label: ""}, "label") do
+      # {:default, ""}
+      default("")
     end
 
     def get_property(%{label: label}, "label") do
-      {:ok, {:dbus_variant, :string, label}}
+      # {:ok, {:dbus_variant, :string, label}}
+      ok_dbus_variant(:string, label)
     end
 
-    def get_property(%{icon: icon_name}, "icon_name") when is_binary(icon_name) do
-      {:ok, {:dbus_variant, :string, icon_name}}
+    def get_property(%{icon: ""}, "icon-name") do
+      # {:default, ""}
+      default()
+    end
+
+    def get_property(%{type: :separator}, "icon-name") do
+      default()
+    end
+
+    def get_property(%{icon: icon_name}, "icon-name") when is_binary(icon_name) do
+      # {:ok, {:dbus_variant, :string, icon_name}}
+      ok_dbus_variant(:string, icon_name)
+    end
+
+    def get_property(%{icon: %IconInfo{name: ""}}, "icon-name") do
+      # {:default, ""}
+      default()
     end
 
     def get_property(%{icon: %IconInfo{name: name}}, "icon-name") do
-      {:ok, {:dbus_variant, :string, name}}
+      # {:ok, {:dbus_variant, :string, name}}
+      ok_dbus_variant(:string, name)
+    end
+
+    def get_property(%{type: :separator}, "icon-data") do
+      default()
+    end
+
+    def get_property(%{icon: %IconInfo{data: ""}}, "icon-data") do
+      # {:default, nil}
+      default(nil)
     end
 
     def get_property(%{icon: %IconInfo{data: data}}, "icon-data") when is_binary(data) do
@@ -109,40 +336,90 @@ defmodule ExSni.Menu.Item do
     end
 
     def get_property(_, "icon-data") do
-      {:ok, {:dbus_variant, :string, ""}}
+      # {:ok, {:dbus_variant, :string, ""}}
+      # {:default, ""}
+      default()
     end
 
-    def get_property(%{toggle_type: :checkmark}, "toggle-type") do
-      {:ok, {:dbus_variant, :string, "checkmark"}}
+    def get_property(%{type: :checkbox}, "toggle-type") do
+      ok_dbus_variant(:string, "checkmark")
     end
 
-    def get_property(%{toggle_type: :radio}, "toggle-type") do
-      {:ok, {:dbus_variant, :string, "radio"}}
+    def get_property(%{type: :radio}, "toggle-type") do
+      ok_dbus_variant(:string, "radio")
     end
 
     def get_property(_, "toggle-type") do
-      {:ok, {:dbus_variant, :string, ""}}
+      default()
     end
 
-    def get_property(%{toggle_state: :on}, "toggle-state") do
-      {:ok, {:dbus_variant, :int32, 1}}
+    # def get_property(%{toggle_type: :checkmark}, "toggle-type") do
+    #   # {:ok, {:dbus_variant, :string, "checkmark"}}
+    #   ok_dbus_variant(:string, "checkmark")
+    # end
+
+    # def get_property(%{toggle_type: :radio}, "toggle-type") do
+    #   # {:ok, {:dbus_variant, :string, "radio"}}
+    #   ok_dbus_variant(:string, "radio")
+    # end
+
+    # def get_property(_, "toggle-type") do
+    #   # {:ok, {:dbus_variant, :string, ""}}
+    #   # {:default, ""}
+    #   default()
+    # end
+
+    def get_property(%{type: type, checked: true}, "toggle-state") when type in [:checkbox, :radio] do
+      ok_dbus_variant(:int32, 1)
     end
 
-    def get_property(%{toggle_state: :off}, "toggle-state") do
-      {:ok, {:dbus_variant, :int32, 0}}
+    def get_property(%{type: type, checked: false}, "toggle-state") when type in [:checkbox, :radio] do
+      ok_dbus_variant(:int32, 0)
     end
 
     def get_property(_, "toggle-state") do
-      {:ok, {:dbus_variant, :int32, -1}}
+      default(-1)
     end
 
-    def get_property(%{children: [_ | _]}, "children-display") do
-      {:ok, {:dbus_variant, :string, "submenu"}}
+    # def get_property(%{toggle_state: :on}, "toggle-state") do
+    #   # {:ok, {:dbus_variant, :int32, 1}}
+    #   ok_dbus_variant(:int32, 1)
+    # end
+
+    # def get_property(%{toggle_state: :off}, "toggle-state") do
+    #   # {:ok, {:dbus_variant, :int32, 0}}
+    #   ok_dbus_variant(:int32, 0)
+    # end
+
+    # def get_property(_, "toggle-state") do
+    #   # {:ok, {:dbus_variant, :int32, -1}}
+    #   # {:default, -1}
+    #   default(-1)
+    # end
+
+    def get_property(%{type: type, children: [_ | _]}, "children-display") when type in [:root, :menu] do
+      ok_dbus_variant(:string, "submenu")
     end
 
-    def get_property(%{children: []}, "children-display") do
-      {:ok, {:dbus_variant, :string, ""}}
+    def get_property(_, "children-display") do
+      default()
     end
+
+    # def get_property(%{type: "separator"}, "children-display") do
+    #   # {:default, ""}
+    #   default("")
+    # end
+
+    # def get_property(%{children: [_ | _]}, "children-display") do
+    #   # {:ok, {:dbus_variant, :string, "submenu"}}
+    #   ok_dbus_variant(:string, "submenu")
+    # end
+
+    # def get_property(%{children: []}, "children-display") do
+    #   # {:ok, {:dbus_variant, :string, ""}}
+    #   # {:default, ""}
+    #   default()
+    # end
 
     def get_property(_, _) do
       {:error, "org.freedesktop.DBus.Error.UnknownProperty", "Invalid property"}
@@ -170,6 +447,14 @@ defmodule ExSni.Menu.Item do
           _ -> acc
         end
       end)
+    end
+
+    defp ok_dbus_variant(type, value) do
+      {:ok, {:dbus_variant, type, value}}
+    end
+
+    defp default(value \\ "") do
+      {:default, value}
     end
   end
 end

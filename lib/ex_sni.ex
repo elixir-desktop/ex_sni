@@ -98,7 +98,13 @@ defmodule ExSni do
 
   @spec update_menu(sni_pid :: pid(), parentId :: nil | integer(), menu :: nil | %Menu{}) :: any()
   def update_menu(sni_pid, nil, menu) do
-    with {:ok, %{version: v} = menu} <- set_menu(sni_pid, menu) do
+    IO.inspect("", label: "[#{System.os_time(:millisecond)}] [ExSNI][update_menu]")
+    with {:ok, old_menu} <- get_menu(sni_pid),
+         {:ok, %{version: v} = menu} <- set_menu(sni_pid, menu) do
+      IO.inspect(v, label: "[#{System.os_time(:millisecond)}] [ExSNI][update_menu] Sending LayoutUpdated")
+
+      ExSni.MenuDiff.diff(menu, old_menu)
+
       send_menu_signal(sni_pid, "LayoutUpdated", [v, 0])
 
       # Signaling `LayoutUpdated/2` is not enough here.
@@ -108,15 +114,17 @@ defmodule ExSni do
       # Because we're reusing menu item IDs (e.g. when removing and adding an item)
       # right now just send the whole list of properties for all items.
       # TODO: Optimize to only send the properties that have changed
+      IO.inspect("", label: "[#{System.os_time(:millisecond)}] [ExSNI][update_menu] get_group_properties :all")
       result = ExSni.Menu.get_group_properties(menu, :all, [])
+      IO.inspect(result, label: "[#{System.os_time(:millisecond)}] [ExSNI][update_menu] send ItemsPropertiesUpdated")
+      # send_menu_signal(sni_pid, "ItemsPropertiesUpdated", [
+      #   # Array of item properties and values that changed (all, for all items)
+      #   result,
+      #   # No properties removed (empty array)
+      #   []
+      # ])
 
-      send_menu_signal(sni_pid, "ItemsPropertiesUpdated", [
-        # Array of item properties and values that changed (all, for all items)
-        result,
-        # No properties removed (empty array)
-        []
-      ])
-
+      IO.inspect("", label: "[#{System.os_time(:millisecond)}] [ExSNI][update_menu] done.")
       {:ok, menu}
     end
   end

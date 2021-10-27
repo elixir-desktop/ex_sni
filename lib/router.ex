@@ -16,7 +16,13 @@ defimpl ExDBus.Router.Protocol, for: ExSni.Router do
         {parentId, depth, properties},
         _context
       ) do
-    Menu.get_layout(menu, parentId, depth, properties)
+
+    IO.inspect({parentId, depth, properties}, label: "[#{System.os_time(:millisecond)}] [ExSNI][dbus] GetLayout")
+
+    ret = Menu.get_layout(menu, parentId, depth, properties)
+
+    IO.inspect(ret, label: "[#{System.os_time(:millisecond)}] [ExSNI][dbus] GetLayout")
+    ret
   end
 
   def method(
@@ -28,7 +34,11 @@ defimpl ExDBus.Router.Protocol, for: ExSni.Router do
         {ids, properties},
         _context
       ) do
+    IO.inspect({ids, properties}, label: "[#{System.os_time(:millisecond)}] [ExSNI][dbus] GetGroupProperties")
+
     result = Menu.get_group_properties(menu, ids, properties)
+
+    IO.inspect(result, label: "[#{System.os_time(:millisecond)}] [ExSNI][dbus] GOT GetGroupProperties")
 
     {:ok, [{:array, {:struct, [:int32, {:dict, :string, :variant}]}}], [result]}
   end
@@ -77,6 +87,7 @@ defimpl ExDBus.Router.Protocol, for: ExSni.Router do
         {id, eventId, data, timestamp},
         _context
       ) do
+    IO.inspect({id, eventId, data, timestamp}, label: "[#{System.os_time(:millisecond)}] [ExSNI][dbus] Menu OnEvent")
     Menu.onEvent(menu, eventId, id, data, timestamp)
     {:ok, [], []}
   end
@@ -128,6 +139,7 @@ defimpl ExDBus.Router.Protocol, for: ExSni.Router do
         property,
         _context
       ) do
+    IO.inspect(property, label: "[#{System.os_time(:millisecond)}] [ExSNI][dbus] Icon GetProperty")
     ExSni.DbusProtocol.get_property(icon, property)
   end
 
@@ -138,6 +150,7 @@ defimpl ExDBus.Router.Protocol, for: ExSni.Router do
         property,
         _context
       ) do
+    IO.inspect(property, label: "[#{System.os_time(:millisecond)}] [ExSNI][dbus] Menu GetProperty")
     ExSni.DbusProtocol.get_property(menu, property)
   end
 
