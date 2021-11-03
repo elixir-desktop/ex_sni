@@ -4,6 +4,7 @@ defmodule ExSni.Menu.Item do
 
   defstruct id: 0,
             # type: "standard",
+            uid: "",
             type: :standard,
             enabled: true,
             visible: true,
@@ -22,6 +23,7 @@ defmodule ExSni.Menu.Item do
   @type t() :: %__MODULE__{
           id: id(),
           # type: String.t(),
+          uid: String.t(),
           type: item_type(),
           enabled: boolean(),
           visible: boolean(),
@@ -74,6 +76,15 @@ defmodule ExSni.Menu.Item do
     |> set_label(label)
   end
 
+  @doc """
+  WARNING: Always use unique IDs across the entire tree.
+  If you set the same ID for a node and any of its descendants,
+  most menu hosts (i.e. libdbusmenu) will recurse indefinitely when attempting
+  to build the list of IDs to request the layout for; which will most likely
+  result in a system-wide crash/hang.
+
+  To store custom ID (e.g. "id" attribute), use `uid` property and `set_uid/2`
+  """
   @spec set_id(t(), id :: id()) :: t()
   def set_id(%__MODULE__{type: type} = item, id) when type not in [:root, :separator] do
     %{item | id: id}
@@ -81,6 +92,11 @@ defmodule ExSni.Menu.Item do
 
   def set_id(%__MODULE__{} = item, _) do
     item
+  end
+
+  @spec set_uid(t(), uid :: String.t()) :: t()
+  def set_uid(%__MODULE__{} = item, uid) do
+    %{item | uid: uid}
   end
 
   @spec set_label(t(), label :: String.t()) :: t()
@@ -223,7 +239,7 @@ defmodule ExSni.Menu.Item do
   # This does not check for :id property
   @spec get_changed_properties(current :: t(), other:: t(), properties :: list(atom())) :: list(atom())
   def get_changed_properties(%__MODULE__{} = current, %__MODULE__{} = other) do
-    get_changed_properties(current, other, [:type, :label, :enabled, :visible, :toggle_type, :toggle_state, :icon, :children])
+    get_changed_properties(current, other, [:type, :label, :enabled, :visible, :icon, :children])
   end
 
   def get_changed_properties(%__MODULE__{}, %__MODULE__{}, []) do
@@ -455,6 +471,54 @@ defmodule ExSni.Menu.Item do
 
     defp default(value \\ "") do
       {:default, value}
+    end
+  end
+
+  defimpl Xtree.Protocol do
+    def name(%{type: :separator}) do
+      "hr"
+    end
+
+    def name(%{type: type}) when type in [:root, :menu] do
+      "menu"
+    end
+
+    def name(_) do
+      "item"
+    end
+
+    def children(%{children: children}) do
+      children
+    end
+
+    def type(_) do
+      :element
+    end
+
+    def value(%{type: :separator}) do
+      ""
+    end
+
+    def value(%{type: type} = node) when type in [:root, :menu] do
+      default_value(node)
+    end
+
+    def value(%{type: type, checked: checked} = node) do
+      "type=#{type};checked=#{checked}" <> default_value(node)
+    end
+
+    # TODO: HANDLE ICON into value
+
+    def value(node) do
+      default_value(node)
+    end
+
+    def id(%{uid: uid}) do
+      uid
+    end
+
+    defp default_value(%{uid: uid, label: label, enabled: enabled, visible: visible}) do
+      "id=#{uid};enabled=#{enabled};visible=#{visible};label=#{label}"
     end
   end
 end
