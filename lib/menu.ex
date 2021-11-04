@@ -8,6 +8,7 @@ defmodule ExSni.Menu do
             icon_theme_path: [""],
             status: "normal",
             root: %Item{},
+            last_id: 0,
             callbacks: []
 
   @type fn_callback() :: (... -> any())
@@ -19,6 +20,7 @@ defmodule ExSni.Menu do
           icon_theme_path: list(String.t()),
           status: String.t(),
           root: Item.t(),
+          last_id: non_neg_integer(),
           callbacks: list(callback())
         }
 
@@ -48,6 +50,14 @@ defmodule ExSni.Menu do
     end
   end
 
+  def get_layout(nil, 0, _, _) do
+    {:ok, [:uint32, @dbus_menu_item_type], [0, [0, [], []]]}
+  end
+
+  def get_layout(_, _, _, _) do
+    {:error, "org.freedesktop.DBus.Error.Failed", "No such menu item"}
+  end
+
   def get_group_properties(%__MODULE__{} = menu, :all, properties) do
     ids =
       menu
@@ -65,6 +75,31 @@ defmodule ExSni.Menu do
       values = ExSni.DbusProtocol.get_properties(item, properties)
       [item.id, values]
     end)
+  end
+
+  def get_group_properties(_, _, _) do
+    []
+  end
+
+  def get_group_properties_per_item(%__MODULE__{} = menu, mapping) do
+    Enum.reduce(mapping, [], fn {id, properties}, acc ->
+      case find_item(menu, id) do
+        nil ->
+          acc
+
+        item ->
+          values = ExSni.DbusProtocol.get_properties(item, properties)
+          [id, values]
+      end
+    end)
+  end
+
+  def get_last_id(%__MODULE__{last_id: last_id}) do
+    last_id
+  end
+
+  def get_last_id(_) do
+    0
   end
 
   defp get_children(%__MODULE__{root: %{} = root}) do
@@ -105,6 +140,10 @@ defmodule ExSni.Menu do
     end
   end
 
+  def onAboutToShow(nil, _) do
+    false
+  end
+
   @spec onEvent(
           t(),
           eventId :: String.t(),
@@ -120,6 +159,10 @@ defmodule ExSni.Menu do
     case find_item(menu, id) do
       %Item{callbacks: callbacks} -> run_events(callbacks, eventId, data, timestamp)
     end
+  end
+
+  def onEvent(nil, _, _, _, _) do
+    nil
   end
 
   defp run_events(callbacks, eventId, data, timestamp) do
@@ -201,6 +244,10 @@ defimpl ExSni.DbusProtocol, for: ExSni.Menu do
     {:error, "org.freedesktop.DBus.Error.UnknownProperty", "Invalid property"}
   end
 
+  def get_property(item, property, _) do
+    get_property(item, property)
+  end
+
   def get_properties(item, []) do
     get_properties(item, [
       "Version",
@@ -211,9 +258,13 @@ defimpl ExSni.DbusProtocol, for: ExSni.Menu do
   end
 
   def get_properties(item, properties) do
+    get_properties(item, properties, [])
+  end
+
+  def get_properties(item, properties, options) do
     properties
     |> Enum.reduce([], fn property, acc ->
-      case get_property(item, property) do
+      case get_property(item, property, options) do
         {:ok, value} -> [{property, value} | acc]
         _ -> acc
       end

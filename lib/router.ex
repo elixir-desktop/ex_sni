@@ -2,6 +2,12 @@ defmodule ExSni.Router do
   defstruct icon: nil,
             icon_registered: false,
             menu: nil
+
+  @type t() :: %__MODULE__{
+    icon: nil | pid() | atom() | ExSni.Icon.t() | tuple(),
+    icon_registered: boolean(),
+    menu: nil | pid() | atom() | ExSni.Menu.t() | tuple()
+  }
 end
 
 defimpl ExDBus.Router.Protocol, for: ExSni.Router do
@@ -16,12 +22,13 @@ defimpl ExDBus.Router.Protocol, for: ExSni.Router do
         {parentId, depth, properties},
         _context
       ) do
-
-    IO.inspect({parentId, depth, properties}, label: "[#{System.os_time(:millisecond)}] [ExSNI][dbus] GetLayout")
+    IO.inspect({parentId, depth, properties},
+      label: "[#{System.os_time(:millisecond)}] [ExSNI][Router] GetLayout"
+    )
 
     ret = Menu.get_layout(menu, parentId, depth, properties)
 
-    IO.inspect(ret, label: "[#{System.os_time(:millisecond)}] [ExSNI][dbus] GetLayout")
+    IO.inspect(ret, label: "[#{System.os_time(:millisecond)}] [ExSNI][Router] GetLayout")
     ret
   end
 
@@ -34,11 +41,15 @@ defimpl ExDBus.Router.Protocol, for: ExSni.Router do
         {ids, properties},
         _context
       ) do
-    IO.inspect({ids, properties}, label: "[#{System.os_time(:millisecond)}] [ExSNI][dbus] GetGroupProperties")
+    IO.inspect({ids, properties},
+      label: "[#{System.os_time(:millisecond)}] [ExSNI][Router] GetGroupProperties"
+    )
 
     result = Menu.get_group_properties(menu, ids, properties)
 
-    IO.inspect(result, label: "[#{System.os_time(:millisecond)}] [ExSNI][dbus] GOT GetGroupProperties")
+    IO.inspect(result,
+      label: "[#{System.os_time(:millisecond)}] [ExSNI][Router] GOT GetGroupProperties"
+    )
 
     {:ok, [{:array, {:struct, [:int32, {:dict, :string, :variant}]}}], [result]}
   end
@@ -87,9 +98,72 @@ defimpl ExDBus.Router.Protocol, for: ExSni.Router do
         {id, eventId, data, timestamp},
         _context
       ) do
-    IO.inspect({id, eventId, data, timestamp}, label: "[#{System.os_time(:millisecond)}] [ExSNI][dbus] Menu OnEvent")
+    IO.inspect({id, eventId, data, timestamp},
+      label: "[#{System.os_time(:millisecond)}] [ExSNI][Router] Menu OnEvent"
+    )
+
     Menu.onEvent(menu, eventId, id, data, timestamp)
     {:ok, [], []}
+  end
+
+  # Route Menu methods to server if any
+  def method(
+        %{menu: server_pid},
+        "/MenuBar",
+        "com.canonical.dbusmenu",
+        method_name,
+        _signature,
+        arguments,
+        _context
+      )
+      when is_pid(server_pid) do
+    IO.inspect({method_name, arguments},
+      label:
+        "[#{System.os_time(:millisecond)}] [ExSNI][Router] Route Menu method to Menu.Server pid"
+    )
+
+    Menu.Server.method(server_pid, method_name, arguments)
+  end
+
+  def method(
+        %{menu: {:via, _, _} = server_via},
+        "/MenuBar",
+        "com.canonical.dbusmenu",
+        method_name,
+        _signature,
+        arguments,
+        _context
+      ) do
+    IO.inspect({method_name, arguments},
+      label: "[#{System.os_time(:millisecond)}] [ExSNI][Router] Route Menu method via Menu.Server"
+    )
+
+    Menu.Server.method(server_via, method_name, arguments)
+  end
+
+  # Route Menu methods to server if any
+  def method(
+        %{menu: server_pid_resolver},
+        "/MenuBar",
+        "com.canonical.dbusmenu",
+        method_name,
+        _signature,
+        arguments,
+        _context
+      )
+      when is_function(server_pid_resolver) do
+    IO.inspect({method_name, arguments},
+      label:
+        "[#{System.os_time(:millisecond)}] [ExSNI][Router] Route Menu method to resolved Menu.Server"
+    )
+
+    case resolve(server_pid_resolver) do
+      {:ok, server_pid} ->
+        Menu.Server.method(server_pid, method_name, arguments)
+
+      {:error, _} ->
+        :skip
+    end
   end
 
   def method(
@@ -139,7 +213,10 @@ defimpl ExDBus.Router.Protocol, for: ExSni.Router do
         property,
         _context
       ) do
-    IO.inspect(property, label: "[#{System.os_time(:millisecond)}] [ExSNI][dbus] Icon GetProperty")
+    IO.inspect(property,
+      label: "[#{System.os_time(:millisecond)}] [ExSNI][Router] Icon GetProperty"
+    )
+
     ExSni.DbusProtocol.get_property(icon, property)
   end
 
@@ -150,8 +227,62 @@ defimpl ExDBus.Router.Protocol, for: ExSni.Router do
         property,
         _context
       ) do
-    IO.inspect(property, label: "[#{System.os_time(:millisecond)}] [ExSNI][dbus] Menu GetProperty")
+    IO.inspect(property,
+      label: "[#{System.os_time(:millisecond)}] [ExSNI][Router] Menu GetProperty"
+    )
+
     ExSni.DbusProtocol.get_property(menu, property)
+  end
+
+  # Route Menu property getters to menu server
+  def get_property(
+        %{menu: server_pid},
+        "/MenuBar",
+        "com.canonical.dbusmenu",
+        property,
+        _context
+      )
+      when is_pid(server_pid) do
+    IO.inspect(property,
+      label:
+        "[#{System.os_time(:millisecond)}] [ExSNI][Router] Route Menu GetProperty to MenuServer pid"
+    )
+
+    Menu.Server.get_property(server_pid, property)
+  end
+
+  def get_property(
+        %{menu: {:via, _, _} = server_via},
+        "/MenuBar",
+        "com.canonical.dbusmenu",
+        property,
+        _context
+      ) do
+    IO.inspect(property,
+      label:
+        "[#{System.os_time(:millisecond)}] [ExSNI][Router] Route Menu GetProperty via MenuServer"
+    )
+
+    Menu.Server.get_property(server_via, property)
+  end
+
+  def get_property(
+        %{menu: server_pid_resolver},
+        "/MenuBar",
+        "com.canonical.dbusmenu",
+        property,
+        _context
+      )
+      when is_function(server_pid_resolver) do
+    IO.inspect(property,
+      label:
+        "[#{System.os_time(:millisecond)}] [ExSNI][Router] Route Menu GetProperty to resolved MenuServer"
+    )
+
+    case resolve(server_pid_resolver) do
+      {:ok, server_pid} -> Menu.Server.get_property(server_pid, property)
+      {:error, _} -> :skip
+    end
   end
 
   def get_property(_router, _path, _interface, _property, _context) do
@@ -161,5 +292,19 @@ defimpl ExDBus.Router.Protocol, for: ExSni.Router do
   # SNI properties are all read-only
   def set_property(_router, _path, _interface, _property, _value, _context) do
     :skip
+  end
+
+  defp resolve(fn_resolver) do
+    try do
+      fn_resolver.()
+    rescue
+      e -> {:error, e}
+    else
+      {:ok, {:via, _, _} = via} -> {:ok, via}
+      {:ok, pid} when is_pid(pid) -> {:ok, pid}
+      pid when is_pid(pid) -> {:ok, pid}
+      {:error, reason} -> {:error, reason}
+      other -> {:error, other}
+    end
   end
 end
