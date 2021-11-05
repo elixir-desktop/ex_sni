@@ -35,6 +35,9 @@ defmodule ExSni.MixProject do
       {:ex_dbus, path: "../ex_dbus"},
       {:xdiff_plus, path: "../xdiff_plus"},
 
+      # UUID generator
+      {:uuid, "~> 1.1"},
+
       # Development dialyzer
       {:dialyxir, "~> 1.1.0", only: [:dev, :test], runtime: false}
     ]
