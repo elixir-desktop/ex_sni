@@ -7,7 +7,7 @@ defmodule ExSni.Menu do
             text_direction: "ltr",
             icon_theme_path: [""],
             status: "normal",
-            root: %Item{},
+            root: nil,
             last_id: 0,
             callbacks: []
 
@@ -50,8 +50,8 @@ defmodule ExSni.Menu do
     end
   end
 
-  def get_layout(nil, 0, _, _) do
-    {:ok, [:uint32, @dbus_menu_item_type], [0, [0, [], []]]}
+  def get_layout(%__MODULE__{root: _, version: version}, parentId, _, _) do
+    {:ok, [:uint32, @dbus_menu_item_type], [version, [parentId, [], []]]}
   end
 
   def get_layout(_, _, _, _) do

@@ -3,15 +3,13 @@ defmodule ExSni.Menu.Item do
   alias ExSni.Menu
 
   defstruct id: 0,
-            # type: "standard",
+            uuid: "",
             uid: "",
             type: :standard,
             enabled: true,
             visible: true,
             label: "",
             icon: nil,
-            # toggle_type: nil,
-            # toggle_state: nil,
             checked: false,
             children: [],
             callbacks: []
@@ -22,15 +20,13 @@ defmodule ExSni.Menu.Item do
   @type toggle_state() :: nil | :on | :off
   @type t() :: %__MODULE__{
           id: id(),
-          # type: String.t(),
+          uuid: String.t(),
           uid: String.t(),
           type: item_type(),
           enabled: boolean(),
           visible: boolean(),
           label: String.t(),
           icon: nil | String.t() | IconInfo.t(),
-          # toggle_type: toggle_type(),
-          # toggle_state: toggle_state(),
           checked: boolean(),
           children: list(t()),
           callbacks: list(Menu.callback())
@@ -46,33 +42,39 @@ defmodule ExSni.Menu.Item do
   @spec separator() :: t()
   def separator() do
     %__MODULE__{id: 1, type: :separator}
+    |> assign_uuid()
   end
 
   @spec root(children :: list(t())) :: t()
   def root(children \\ []) do
     %__MODULE__{id: 0, type: :root, children: children}
+    |> assign_uuid()
   end
 
   @spec menu(children :: list(t())) :: t()
   def menu(children \\ []) do
     %__MODULE__{type: :menu, children: children}
+    |> assign_uuid()
   end
 
   @spec checkbox() :: t()
   def checkbox(label \\ "") do
     %__MODULE__{type: :checkbox}
+    |> assign_uuid()
     |> set_label(label)
   end
 
   @spec radio() :: t()
   def radio(label \\ "") do
     %__MODULE__{type: :radio}
+    |> assign_uuid()
     |> set_label(label)
   end
 
   @spec standard(label :: String.t()) :: t()
   def standard(label \\ "") do
     %__MODULE__{type: :standard}
+    |> assign_uuid()
     |> set_label(label)
   end
 
@@ -107,6 +109,11 @@ defmodule ExSni.Menu.Item do
 
   def set_label(item, _) do
     item
+  end
+
+  @spec assign_uuid(t()) :: t()
+  def assign_uuid(%__MODULE__{} = item) do
+    %{item | uuid: UUID.uuid4()}
   end
 
   @spec set_callbacks(t(), callbacks :: list(Menu.callback())) :: t()
@@ -188,7 +195,7 @@ defmodule ExSni.Menu.Item do
     prop_values =
       properties
       |> Enum.map(fn property ->
-        case ExSni.DbusProtocol.get_property(menu_item, property) do
+        case ExSni.DbusProtocol.get_property(menu_item, property, :ignore_default) do
           {:ok, value} -> {property, value}
           _ -> nil
         end
@@ -249,6 +256,8 @@ defmodule ExSni.Menu.Item do
       [property | get_changed_properties(current, other, properties)]
     end
   end
+
+  def get_dbus_changed_properties(current, other, opts \\ [])
 
   def get_dbus_changed_properties(%__MODULE__{} = current, %__MODULE__{} = other, opts) do
     [
