@@ -98,63 +98,7 @@ defmodule ExSni do
 
   @spec update_menu(sni_pid :: pid(), parentId :: nil | integer(), menu :: nil | %Menu{}) :: any()
   def update_menu(sni_pid, nil, menu) do
-    IO.inspect("", label: "[#{System.os_time(:millisecond)}] [ExSNI][update_menu]")
-
     set_menu(sni_pid, menu)
-
-    # with {:ok, menu_handle} <- get_menu_handle(sni_pid),
-    #      {:ok, old_menu} <- get_menu(menu_handle),
-    #      {layout_update_id, ids_to_update, replace_menu} <- MenuDiff.diff(menu, old_menu),
-    #      {:ok, %{version: v} = menu} <- set_menu(sni_pid, menu_handle, replace_menu) do
-    #   IO.inspect(v,
-    #     label: "[#{System.os_time(:millisecond)}] [ExSNI][update_menu] Entering update_menu"
-    #   )
-
-    #   reset_menu(menu_handle)
-    #   reset_menu(menu_handle)
-
-    #   # IO.inspect(is_menu_pending_reset?(menu_handle), label: "Is menu resetting?")
-
-    #   # reset_menu(sni_pid, menu_handle, 5, fn ret ->
-    #   #   # Once the menu has been fully reset over dbus
-    #   #   # Assign the new menu
-    #   #   set_menu(sni_pid, menu_handle, menu)
-    #   #   send_menu_signal(sni_pid, "LayoutUpdated", [6, 0])
-    #   # end)
-
-    #   # reset_menu(sni_pid, menu_handle, 7, fn ret ->
-    #   #   IO.inspect(ret, label: "MENU AFTER RESET 2")
-    #   # end)
-
-    #   unless layout_update_id == -1 do
-    #     send_menu_signal(sni_pid, "LayoutUpdated", [v, layout_update_id])
-    #   end
-
-    #   unless ids_to_update == [] do
-    #     IO.inspect("",
-    #       label:
-    #         "[#{System.os_time(:millisecond)}] [ExSNI][update_menu] get_group_properties :all"
-    #     )
-
-    #     # TODO: get properties that have changed only!
-    #     result = ExSni.Menu.get_group_properties(menu, ids_to_update, [])
-
-    #     IO.inspect(result,
-    #       label:
-    #         "[#{System.os_time(:millisecond)}] [ExSNI][update_menu] send ItemsPropertiesUpdated"
-    #     )
-
-    #     send_menu_signal(sni_pid, "ItemsPropertiesUpdated", [
-    #       # Array of item properties and values that changed (all, for all items)
-    #       result,
-    #       # No properties removed (empty array)
-    #       []
-    #     ])
-    #   end
-
-    #   IO.inspect("", label: "[#{System.os_time(:millisecond)}] [ExSNI][update_menu] done.")
-    #   {:ok, menu}
-    # end
   end
 
   @spec get_icon(pid()) :: {:ok, nil | Icon.t()} | {:error, any()}
