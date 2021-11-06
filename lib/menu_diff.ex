@@ -112,7 +112,7 @@ defmodule ExSni.MenuDiff do
 
         {0, group_properties, node}
 
-      {inserts, deletes, [], _unchanged} ->
+      {_inserts, deletes, [], _unchanged} ->
         # IO.inspect("{inserts, deletes, [], unchanged}", label: "[DIFF::[7]]")
         # [x] Implemented
         # This is only a layout change where items have been removed from the old menu

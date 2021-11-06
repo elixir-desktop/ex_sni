@@ -2,7 +2,7 @@ defmodule ExSni do
   use Supervisor
 
   alias ExSni.Bus
-  alias ExSni.{Icon, Menu, MenuDiff}
+  alias ExSni.{Icon, Menu}
 
   def start_link(init_opts \\ [], start_opts \\ []) do
     Supervisor.start_link(__MODULE__, init_opts, start_opts)
