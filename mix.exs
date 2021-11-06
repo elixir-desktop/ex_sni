@@ -31,9 +31,9 @@ defmodule ExSni.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      # {:ex_dbus, "~> 0.1.1"},
-      {:ex_dbus, path: "../ex_dbus"},
-      {:xdiff_plus, path: "../xdiff_plus"},
+      {:ex_dbus, "~> 0.1.1"},
+      # {:ex_dbus, path: "../ex_dbus"},
+      {:xdiff_plus, "~> 0.1"},
 
       # UUID generator
       {:uuid, "~> 1.1"},
