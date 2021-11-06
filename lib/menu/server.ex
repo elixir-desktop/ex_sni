@@ -6,14 +6,14 @@ defmodule ExSni.Menu.Server do
 
   defmodule SignalsState do
     defstruct layout_updated: {0, false},
-              properties_updated: {0, false},
+              items_properties_updated: {0, false},
               activation_request: {0, false}
 
     @type signal_tracking() ::
             {last_requested_timestamp :: non_neg_integer(), queued? :: boolean()}
     @type t() :: %__MODULE__{
             layout_updated: signal_tracking(),
-            properties_updated: signal_tracking(),
+            items_properties_updated: signal_tracking(),
             activation_request: signal_tracking()
           }
   end
@@ -21,12 +21,13 @@ defmodule ExSni.Menu.Server do
   defmodule State do
     defstruct menu: %Menu{version: 1},
               signals: %SignalsState{},
-              get_layout: {0, false},
-              get_group_properties: {0, false},
+              get_layout: {0, nil},
+              get_group_properties: {0, nil},
               last_layout_menu: nil,
               dbus_service: nil,
               menu_queue: [%Menu{version: 1}],
-              throttle: 600
+              throttle: 6000,
+              started_at: 0
 
     @type t() :: %__MODULE__{
             menu: Menu.t(),
@@ -36,7 +37,8 @@ defmodule ExSni.Menu.Server do
             last_layout_menu: nil | Menu.t(),
             dbus_service: nil | pid() | {:via, atom(), any()},
             menu_queue: list(Menu.t()),
-            throttle: non_neg_integer()
+            throttle: non_neg_integer(),
+            started_at: number()
           }
   end
 
@@ -56,7 +58,11 @@ defmodule ExSni.Menu.Server do
         _ -> %Menu{version: 1}
       end
 
-    state = %State{menu: init_menu, dbus_service: Keyword.get(options, :dbus_service, nil)}
+    state = %State{
+      menu: init_menu,
+      dbus_service: Keyword.get(options, :dbus_service, nil),
+      started_at: now()
+    }
 
     {:ok, state}
   end
@@ -70,7 +76,7 @@ defmodule ExSni.Menu.Server do
   end
 
   def set(server_pid, menu) do
-    GenServer.call(server_pid, {:set, menu, false})
+    GenServer.cast(server_pid, {:set, menu})
   end
 
   def get(server_pid) do
@@ -78,17 +84,23 @@ defmodule ExSni.Menu.Server do
   end
 
   def reset(server_pid) do
-    GenServer.call(server_pid, {:set, nil, true})
+    GenServer.cast(server_pid, {:set, nil})
   end
 
   # GenServer implementations
 
   @impl true
-  def handle_call({:set, menu, force?}, _from, state) do
+  def handle_cast({:set, menu}, state) do
     IO.inspect("menu", label: "[Menu.Server][set menu]/1 -------------------------")
-    handle_set_menu(menu, force?, state)
+
+    set_menu(menu, state)
+    |> case do
+      {:ok, menu, state} -> {:noreply, state}
+      {:noop, menu, state} -> {:noreply, state}
+    end
   end
 
+  @impl true
   def handle_call(:get, _from, %{menu: menu} = state) do
     {:reply, {:ok, menu}, state}
   end
@@ -120,23 +132,6 @@ defmodule ExSni.Menu.Server do
   end
 
   @impl true
-  def handle_info(
-        :signal_layout_updated,
-        %{menu: %{version: version}, dbus_service: dbus_service} = state
-      ) do
-    send_dbus_signal(dbus_service, "LayoutUpdated", [version, 0])
-    {:noreply, state}
-  end
-
-  @impl true
-  def handle_info(
-        {:signal_items_properties_updated, pair},
-        %{menu: %{version: version}, dbus_service: dbus_service} = state
-      ) do
-    send_dbus_signal(dbus_service, "ItemsPropertiesUpdated", pair)
-    {:noreply, state}
-  end
-
   def handle_info(_, state) do
     {:noreply, state}
   end
@@ -164,21 +159,12 @@ defmodule ExSni.Menu.Server do
     {menu, %{state | menu_queue: list}}
   end
 
-  defp handle_set_menu(menu, force?, state) do
-    set_menu(menu, force?, state)
-    |> case do
-      {:ok, menu, state} -> {:reply, menu, state}
-      {:noop, menu, state} -> {:reply, menu, state}
-    end
-  end
-
-  defp set_menu(nil, force?, %{menu: %Menu{} = old_menu} = state) do
-    set_menu(%{old_menu | root: nil}, force?, state)
+  defp set_menu(nil, %{menu: %Menu{} = old_menu} = state) do
+    set_menu(%{old_menu | root: nil}, state)
   end
 
   defp set_menu(
          %Menu{root: nil} = _new_menu,
-         _force?,
          %{menu: %Menu{root: nil} = old_menu} = state
        ) do
     # Request to reset the menu, but the menu is already reset
@@ -187,23 +173,35 @@ defmodule ExSni.Menu.Server do
 
   defp set_menu(
          %Menu{root: nil} = new_menu,
-         force?,
          %{menu: %Menu{version: version, root: old_root} = _old_menu} = state
        ) do
     # Request to reset the menu
     new_menu = %{new_menu | version: version + 1, root: nil}
 
+    set_menu(new_menu, state)
+  end
+
+  defp set_menu(
+         %Menu{root: _} = new_menu,
+         %{menu: %Menu{version: version, root: nil}, get_layout: {0, _}} = state
+       ) do
+    # This is the first time a non-nil menu is set and GetLayout has not yet been called by D-Bus
+    # Skip any comparison
+    IO.inspect(now(state), label: "SET MENU NOW")
+    new_menu = %{new_menu | version: version}
     state = %{state | menu: new_menu}
     {:ok, new_menu, state}
   end
 
   defp set_menu(
          %Menu{root: new_root} = new_menu,
-         force?,
          %{dbus_service: dbus_service, menu: %Menu{version: version, root: old_root} = _old_menu} =
            state
        ) do
-    {layout_update_id, properties_updated, _} = menu_diff = MenuDiff.diff(new_root, old_root)
+    IO.inspect(now(state), label: "SET MENU NOW 2")
+
+    {layout_update_id, properties_updated, new_root} =
+      menu_diff = MenuDiff.diff(new_root, old_root)
 
     menu =
       case menu_diff do
@@ -235,27 +233,23 @@ defmodule ExSni.Menu.Server do
         :ok
 
       list ->
-        #  send_dbus_signal(dbus_service, "ItemsPropertiesUpdated", [properties_updated, []])
-        Process.send_after(
-          self(),
-          {:signal_items_properties_updated, [properties_updated, []]},
-          5
-        )
+        # queue_signal(:items_properties_updated, [properties_updated, []], state)
+        send_dbus_signal(dbus_service, "ItemsPropertiesUpdated", [properties_updated, []])
     end
 
     state = %{state | menu: menu}
     {:ok, menu, state}
   end
 
-  # defp handle_send_signal(
-  #        "LayoutUpdated",
-  #        args,
-  #        %{signals_sent: signals_sent, menu: menu} = state
-  #      ) do
-  # end
+  defp queue_signal(:items_properties_updated, pair, state) do
+    IO.inspect("", label: "Queuing signal_items_properties_updated")
 
-  # defp send_signal(%{dbus_service: service_pid, signals_sent: signals_sent} = state, signal, args) do
-  # end
+    Process.send_after(
+      self(),
+      {:signal_items_properties_updated, pair},
+      5
+    )
+  end
 
   defp send_dbus_signal(service_pid, "LayoutUpdated" = signal, args) do
     service_send_signal(service_pid, signal, {"ui", [:uint32, :int32], args})
@@ -299,13 +293,14 @@ defmodule ExSni.Menu.Server do
     state = %{
       state
       | last_layout_menu: menu,
-        signals: %{signals | layout_updated: :clear}
+        get_layout: {now(state), menu}
     }
 
     {:reply, method_reply("GetLayout", {parentId, depth, properties}, menu), state}
   end
 
   defp handle_method("GetGroupProperties", {ids, properties}, _from, %{menu: menu} = state) do
+    state = %{state | get_group_properties: {now(state), menu}}
     {:reply, method_reply("GetGroupProperties", {ids, properties}, menu), state}
   end
 
@@ -389,6 +384,10 @@ defmodule ExSni.Menu.Server do
 
   defp now() do
     System.monotonic_time(:millisecond)
+  end
+
+  defp now(%{started_at: started_at}) do
+    now() - started_at
   end
 
   # def handle_info(
