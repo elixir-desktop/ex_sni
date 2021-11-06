@@ -529,7 +529,7 @@ defmodule ExSni.Menu.Item do
       "type=#{type};checked=#{checked}" <> default_value(node)
     end
 
-    # TODO: HANDLE ICON into value
+    # Maybe HANDLE ICON into value
 
     def value(node) do
       default_value(node)
