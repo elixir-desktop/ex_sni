@@ -4,15 +4,6 @@ defmodule ExSni do
   alias ExSni.Bus
   alias ExSni.{Icon, Menu}
 
-  # def start_link(opts \\ []) do
-  #   with {:ok, service_name} <- get_required_name(opts),
-  #        {:ok, icon} <- get_required_icon(opts),
-  #        {:ok, menu} <- get_optional_menu(opts),
-  #        router <- %ExSni.Router{icon: icon, menu: menu},
-  #        {:ok, supervisor_pid} <- start_supervisor(service_name, router) do
-  #     {:ok, supervisor_pid}
-  #   end
-  # end
   def start_link(init_opts \\ [], start_opts \\ []) do
     Supervisor.start_link(__MODULE__, init_opts, start_opts)
   end
@@ -22,19 +13,35 @@ defmodule ExSni do
     with {:ok, service_name} <- get_optional_name(opts),
          {:ok, icon} <- get_optional_icon(opts),
          {:ok, menu} <- get_optional_menu(opts) do
-      router = %ExSni.Router{icon: icon, menu: menu}
+      menu_server_pid = {:via, Registry, {ExSniRegistry, "menu_server"}}
+      dbus_service_pid = {:via, Registry, {ExSniRegistry, "dbus_service"}}
+
+      router = %ExSni.Router{
+        icon: icon,
+        menu: menu_server_pid
+      }
 
       children = [
+        {Registry, keys: :unique, name: ExSniRegistry},
         %{
           id: ExDBus.Service,
           start:
             {ExDBus.Service, :start_link,
              [
                [name: service_name, schema: ExSni.Schema, router: router],
-               []
+               [name: dbus_service_pid]
              ]},
           restart: :transient
-        }
+        },
+        # Menu versions server
+        %{
+          id: Menu.Server,
+          start:
+            {Menu.Server, :start_link,
+             [[menu: menu, dbus_service: dbus_service_pid], [name: menu_server_pid]]},
+          restart: :transient
+        },
+        {Task.Supervisor, name: ExSni.Task.Supervisor}
       ]
 
       Supervisor.init(children, strategy: :rest_for_one)
@@ -69,56 +76,29 @@ defmodule ExSni do
     Supervisor.stop(sni_pid)
   end
 
-  @spec get_menu(pid()) :: {:ok, nil | Menu.t()} | {:error, any()}
-  def get_menu(sni_pid) do
-    case get_router(sni_pid) do
-      {:ok, %ExSni.Router{menu: menu}} -> {:ok, menu}
-      error -> error
+  @spec get_menu(pid() | {:router, ExSni.Router.t()} | {:server, pid() | atom() | tuple()}) ::
+          {:ok, nil | Menu.t()} | {:error, any()}
+  def get_menu(sni_pid) when is_pid(sni_pid) or is_atom(sni_pid) do
+    case get_menu_handle(sni_pid) do
+      {:ok, handle} ->
+        Menu.Server.get(handle)
+
+      error ->
+        error
     end
   end
 
   @spec set_menu(pid(), Menu.t() | nil) :: {:ok, Menu.t() | nil} | {:error, any()}
   def set_menu(sni_pid, menu) do
-    with {:ok, router} <- get_router(sni_pid) do
-      version =
-        case router do
-          %{menu: %{version: version}} -> version + 1
-          _ -> 1
-        end
-
-      # Set menu with version in router
-      router = %{router | menu: %{menu | version: version}}
-
-      case set_router(sni_pid, router) do
-        {:ok, %{menu: menu}} -> {:ok, menu}
-        error -> error
-      end
+    case get_menu_handle(sni_pid) do
+      {:ok, handle} -> Menu.Server.set(handle, menu)
+      error -> error
     end
   end
 
   @spec update_menu(sni_pid :: pid(), parentId :: nil | integer(), menu :: nil | %Menu{}) :: any()
   def update_menu(sni_pid, nil, menu) do
-    with {:ok, %{version: v} = menu} <- set_menu(sni_pid, menu) do
-      send_menu_signal(sni_pid, "LayoutUpdated", [v, 0])
-
-      # Signaling `LayoutUpdated/2` is not enough here.
-      # The host service also expects `ItemsPropertiesUpdates/2` signal,
-      # with the list of changes and the list of removed properties.
-
-      # Because we're reusing menu item IDs (e.g. when removing and adding an item)
-      # right now just send the whole list of properties for all items.
-      # TODO: Optimize to only send the properties that have changed
-      result = ExSni.Menu.get_group_properties(menu, :all, [])
-
-      send_menu_signal(sni_pid, "ItemsPropertiesUpdated", [
-        # Array of item properties and values that changed (all, for all items)
-        result,
-        # No properties removed (empty array)
-        []
-      ])
-
-      {:ok, menu}
-    end
+    set_menu(sni_pid, menu)
   end
 
   @spec get_icon(pid()) :: {:ok, nil | Icon.t()} | {:error, any()}
@@ -188,6 +168,19 @@ defmodule ExSni do
     end
   end
 
+  defp get_menu_handle(sni_pid) do
+    case get_router(sni_pid) do
+      {:ok, %ExSni.Router{menu: {:via, _, _} = server_via}} ->
+        {:ok, server_via}
+
+      {:ok, %ExSni.Router{menu: server_pid}} when is_pid(server_pid) ->
+        {:ok, server_pid}
+
+      error ->
+        error
+    end
+  end
+
   defp get_router(sni_pid) do
     with {:ok, service_pid} <- get_service_pid(sni_pid) do
       get_service_router(service_pid)
@@ -201,12 +194,6 @@ defmodule ExSni do
     end
   end
 
-  defp set_router(sni_pid, router) do
-    with {:ok, service_pid} <- get_service_pid(sni_pid) do
-      set_service_router(service_pid, router)
-    end
-  end
-
   defp set_service_router(service_pid, router) do
     ExDBus.Service.set_router(service_pid, router)
   end
@@ -217,7 +204,7 @@ defmodule ExSni do
     end
   end
 
-  defp service_register_icon(service_pid, service_name) when is_pid(service_pid) do
+  defp service_register_icon(service_pid, service_name) do
     GenServer.call(service_pid, {
       :call_method,
       "org.kde.StatusNotifierWatcher",
@@ -228,48 +215,13 @@ defmodule ExSni do
     })
   end
 
-  defp get_service_pid(sni_pid) do
-    sni_pid
-    |> Supervisor.which_children()
-    |> Enum.filter(&(elem(&1, 0) == ExDBus.Service))
-    |> Enum.map(&elem(&1, 1))
-    |> List.first()
-    |> case do
-      nil -> {:error, "Service not found"}
-      service_pid -> {:ok, service_pid}
-    end
-  end
-
-  defp send_menu_signal(sni_pid, "LayoutUpdated" = signal, args) do
-    send_signal(sni_pid, :menu, signal, {"ui", [:uint32, :int32], args})
-  end
-
-  defp send_menu_signal(sni_pid, "ItemsPropertiesUpdated" = signal, args) do
-    send_signal(sni_pid, :menu, signal, {
-      "a(ia{sv})a(ias)",
-      [
-        {:array, {:struct, [:int32, {:dict, :string, :variant}]}},
-        {:array, {:struct, [:int32, {:array, :string}]}}
-      ],
-      args
-    })
+  defp get_service_pid(_sni_pid) do
+    {:ok, {:via, Registry, {ExSniRegistry, "dbus_service"}}}
   end
 
   defp send_icon_signal(sni_pid, signal)
        when signal in ["NewTitle", "NewIcon", "NewAttentionIcon", "NewOverlayIcon", "NewToolTip"] do
     send_signal(sni_pid, :icon, signal, {"", [], []})
-  end
-
-  defp send_signal(sni_pid, :menu, signal, args) do
-    with {:ok, service_pid} <- get_service_pid(sni_pid) do
-      ExDBus.Service.send_signal(
-        service_pid,
-        "/MenuBar",
-        "com.canonical.dbusmenu",
-        signal,
-        args
-      )
-    end
   end
 
   defp send_signal(sni_pid, :icon, signal, args) do

@@ -178,6 +178,10 @@ defimpl ExSni.DbusProtocol, for: ExSni.Icon do
     {:error, "org.freedesktop.DBus.Error.UnknownProperty", "Invalid property"}
   end
 
+  def get_property(icon, property, _) do
+    get_property(icon, property)
+  end
+
   def get_properties(icon, []) do
     get_properties(icon, [
       "Id",
@@ -206,5 +210,9 @@ defimpl ExSni.DbusProtocol, for: ExSni.Icon do
         _ -> acc
       end
     end)
+  end
+
+  def get_properties(icon, properties, _) do
+    get_properties(icon, properties)
   end
 end

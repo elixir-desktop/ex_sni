@@ -2,83 +2,41 @@ defmodule ExSni.Router do
   defstruct icon: nil,
             icon_registered: false,
             menu: nil
+
+  @type t() :: %__MODULE__{
+          icon: nil | pid() | atom() | ExSni.Icon.t() | tuple(),
+          icon_registered: boolean(),
+          menu: nil | pid() | atom() | ExSni.Menu.t() | tuple()
+        }
 end
 
 defimpl ExDBus.Router.Protocol, for: ExSni.Router do
   alias ExSni.{Icon, Menu}
 
+  # Route Menu methods to server if any
   def method(
-        %{menu: %Menu{} = menu},
+        %{menu: server_pid},
         "/MenuBar",
         "com.canonical.dbusmenu",
-        "GetLayout",
+        method_name,
         _signature,
-        {parentId, depth, properties},
+        arguments,
         _context
-      ) do
-    Menu.get_layout(menu, parentId, depth, properties)
+      )
+      when is_pid(server_pid) do
+    Menu.Server.method(server_pid, method_name, arguments)
   end
 
   def method(
-        %{menu: %Menu{} = menu},
+        %{menu: {:via, _, _} = server_via},
         "/MenuBar",
         "com.canonical.dbusmenu",
-        "GetGroupProperties",
+        method_name,
         _signature,
-        {ids, properties},
+        arguments,
         _context
       ) do
-    result = Menu.get_group_properties(menu, ids, properties)
-
-    {:ok, [{:array, {:struct, [:int32, {:dict, :string, :variant}]}}], [result]}
-  end
-
-  # This is called by the applet to notify the application
-  # that it is about to show the menu under the specified item.
-
-  # Params:
-  #   - id::uint32 - Which menu item represents
-  #                 the parent of the item about to be shown.
-  # Returns:
-  #   - needUpdate::boolean() - Whether this AboutToShow event
-  #                   should result in the menu being updated.
-  def method(
-        %{menu: %Menu{} = menu},
-        "/MenuBar",
-        "com.canonical.dbusmenu",
-        "AboutToShow",
-        _signature,
-        id,
-        _context
-      ) do
-    ret = Menu.onAboutToShow(menu, id)
-    {:ok, [:boolean], [ret]}
-  end
-
-  # This is called by the applet to notify the application
-  # an event happened on a menu item.
-
-  # Params:
-  #   - id::uint32      - the id of the item which received the event
-  #   - eventId::string - the type of event
-  #           ("clicked", "hovered", "opened", "closed")
-  #   - data::variant   - event-specific data
-  #   - timestamp::uint32 - The time that the event occured if available
-  #         or the time the message was sent if not
-  # Returns:
-  #   - needUpdate::boolean() - Whether this AboutToShow event
-  #                   should result in the menu being updated.
-  def method(
-        %{menu: %Menu{} = menu},
-        "/MenuBar",
-        "com.canonical.dbusmenu",
-        "Event",
-        _signature,
-        {id, eventId, data, timestamp},
-        _context
-      ) do
-    Menu.onEvent(menu, eventId, id, data, timestamp)
-    {:ok, [], []}
+    Menu.Server.method(server_via, method_name, arguments)
   end
 
   def method(
@@ -131,14 +89,26 @@ defimpl ExDBus.Router.Protocol, for: ExSni.Router do
     ExSni.DbusProtocol.get_property(icon, property)
   end
 
+  # Route Menu property getters to menu server
   def get_property(
-        %{menu: %Menu{} = menu},
+        %{menu: server_pid},
+        "/MenuBar",
+        "com.canonical.dbusmenu",
+        property,
+        _context
+      )
+      when is_pid(server_pid) do
+    Menu.Server.get_property(server_pid, property)
+  end
+
+  def get_property(
+        %{menu: {:via, _, _} = server_via},
         "/MenuBar",
         "com.canonical.dbusmenu",
         property,
         _context
       ) do
-    ExSni.DbusProtocol.get_property(menu, property)
+    Menu.Server.get_property(server_via, property)
   end
 
   def get_property(_router, _path, _interface, _property, _context) do
