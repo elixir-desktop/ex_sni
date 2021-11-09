@@ -276,7 +276,14 @@ defmodule ExSni.Menu.Server do
            menu_queue: [%Menu{root: new_root} = new_menu]
          } = state
        ) do
-    case MenuDiff.diff(new_root, old_root) do
+    IO.inspect(old_root, label: "[MENU DIFF] old root", limit: :infinity)
+    IO.inspect(new_root, label: "[MENU DIFF] new root", limit: :infinity)
+
+    menu_diff =
+      MenuDiff.diff(new_root, old_root)
+      |> IO.inspect(label: "[MENU DIFF] result")
+
+    case menu_diff do
       {-1, [], _} ->
         # No changes between the menus.
         menu = %{new_menu | version: old_version}
@@ -400,6 +407,8 @@ defmodule ExSni.Menu.Server do
   end
 
   defp service_send_signal(service_pid, signal, args) do
+    IO.inspect([signal, args], label: "Sending D-Bus signal", limit: :infinity)
+
     ExDBus.Service.send_signal(
       service_pid,
       "/MenuBar",
@@ -474,19 +483,22 @@ defmodule ExSni.Menu.Server do
   end
 
   defp method_reply("GetLayout", {parentId, depth, properties}, menu) do
-    # IO.inspect({parentId, depth, properties},
-    #   label: "[#{System.os_time(:millisecond)}] [ExSni][Menu.Server] GetLayout"
-    # )
+    IO.inspect({parentId, depth, properties},
+      label: "[#{System.os_time(:millisecond)}] [ExSni][Menu.Server] GetLayout"
+    )
 
     Menu.get_layout(menu, parentId, depth, properties)
+    |> IO.inspect(label: "GetLayout reply", limit: :infinity)
   end
 
   defp method_reply("GetGroupProperties", {ids, properties}, menu) do
-    # IO.inspect({ids, properties},
-    #   label: "[#{System.os_time(:millisecond)}] [ExSni][Menu.Server] GetGroupProperties"
-    # )
+    IO.inspect({ids, properties},
+      label: "[#{System.os_time(:millisecond)}] [ExSni][Menu.Server] GetGroupProperties"
+    )
 
-    result = Menu.get_group_properties(menu, ids, properties)
+    result =
+      Menu.get_group_properties(menu, ids, properties)
+      |> IO.inspect(label: "GetGroupProperties reply", limit: :infinity)
 
     {:ok, [{:array, {:struct, [:int32, {:dict, :string, :variant}]}}], [result]}
   end
@@ -669,10 +681,12 @@ defmodule ExSni.Menu.Server do
   end
 
   defp set_current_menu(state, menu) do
+    IO.inspect(menu, label: "Set current menu", limit: :infinity)
     %{state | menu: menu}
   end
 
   defp set_menu_queue(state, queue) do
+    IO.inspect(queue, label: "Set menu queue", limit: :infinity)
     %{state | menu_queue: queue}
   end
 
