@@ -11,7 +11,7 @@ defmodule ExSni.MenuDiff do
 
     case {inserts, deletes, updates, nops} do
       {[], [], [], []} ->
-        IO.inspect("{[], [], [], []}", label: "[DIFF::[1]]")
+        # IO.inspect("{[], [], [], []}", label: "[DIFF::[1]]")
         # [x] Implemented
         # Nothing to update. Both new and old menus are empty
         # No layout changes
@@ -19,7 +19,7 @@ defmodule ExSni.MenuDiff do
         {-1, [], old_root}
 
       {[], [], [], _unchanged} ->
-        IO.inspect("{[], [], [], _unchanged}", label: "[DIFF::[2]]")
+        # IO.inspect("{[], [], [], _unchanged}", label: "[DIFF::[2]]")
         # [x] Implemented
         # Nothing to update. Both menus are equal
         # No layout changes
@@ -27,7 +27,7 @@ defmodule ExSni.MenuDiff do
         {-1, [], old_root}
 
       {_inserts, _deletes, [], []} ->
-        IO.inspect("{_inserts, _deletes, [], []}", label: "[DIFF::[3]]")
+        # IO.inspect("{_inserts, _deletes, [], []}", label: "[DIFF::[3]]")
         # [x] Implemented
         # If there are inserts or deletes, but there are no updates and no unchanged
         # then this is a completely different new menu
@@ -41,7 +41,7 @@ defmodule ExSni.MenuDiff do
         {-2, [], node}
 
       {[], [], updates, []} ->
-        IO.inspect("{[], [], updates, []}", label: "[DIFF::[4]]")
+        # IO.inspect("{[], [], updates, []}", label: "[DIFF::[4]]")
         # [x] Implemented
         # All items in the old menu have changes.
         # Return the new menu, but assign old menu IDs to all the new items
@@ -60,7 +60,7 @@ defmodule ExSni.MenuDiff do
         {-1, group_properties, node}
 
       {[], [], updates, _unchanged} ->
-        IO.inspect("{[], [], updates, _unchanged}", label: "[DIFF::[5]]")
+        # IO.inspect("{[], [], updates, _unchanged}", label: "[DIFF::[5]]")
         # [x] Implemented
         # This is a partial update of the menu.
         # Return the new menu, and copy old menu IDs to the updated items
@@ -81,7 +81,7 @@ defmodule ExSni.MenuDiff do
         {-1, group_properties, node}
 
       {_inserts, deletes, updates, []} ->
-        IO.inspect("{inserts, deletes, updates, []}", label: "[DIFF::[6]]")
+        # IO.inspect("{inserts, deletes, updates, []}", label: "[DIFF::[6]]")
         # [x] Implemented
         # This is updates to all items in the menu and some deletes and/or some inserts
         # Some layout changes
@@ -113,7 +113,7 @@ defmodule ExSni.MenuDiff do
         {0, group_properties, node}
 
       {_inserts, deletes, [], _unchanged} ->
-        IO.inspect("{inserts, deletes, [], unchanged}", label: "[DIFF::[7]]")
+        # IO.inspect("{inserts, deletes, [], unchanged}", label: "[DIFF::[7]]")
         # [x] Implemented
         # This is only a layout change where items have been removed from the old menu
         # or added in the new menu.
@@ -139,7 +139,7 @@ defmodule ExSni.MenuDiff do
         {0, [], node}
 
       {_inserts, deletes, updates, _unchanged} ->
-        IO.inspect("{inserts, deletes, updates, unchanged}", label: "[DIFF::[8]]")
+        # IO.inspect("{inserts, deletes, updates, unchanged}", label: "[DIFF::[8]]")
         # [x] Implemented
         # There are mixed changes in our menus:
         #   inserts and/or deletes, updates but also unchanged items
@@ -234,6 +234,7 @@ defmodule ExSni.MenuDiff do
     {id, last_id, new_ids_map} =
       case Map.get(mapping, node) do
         %{id: id} when not is_nil(id) ->
+          last_id = if id >= last_id, do: id + 1, else: last_id
           {id, last_id, new_ids_map}
 
         _ ->
