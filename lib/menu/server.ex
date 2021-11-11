@@ -333,7 +333,7 @@ defmodule ExSni.Menu.Server do
          state
          |> set_current_menu(menu)
          |> set_menu_queue([])
-         |> queue_items_properties_updated_signal(updates)
+         |> trigger_items_properties_updated_signal(updates)
          |> trigger_layout_update_signal()}
     end
   end
