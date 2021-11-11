@@ -109,45 +109,6 @@ defmodule ExSni.Menu.Server do
     {:noreply, state}
   end
 
-  defp queue_menu_update(
-         %{menu_update_timer: nil, last_update_at: 0, first_update_throttle: throttle} = state
-       ) do
-    now = time(state)
-
-    timeout =
-      if now >= throttle + 10 do
-        10
-      else
-        throttle - now
-      end
-
-    timer = Process.send_after(self(), :menu_update, timeout)
-    %{state | menu_update_timer: timer}
-  end
-
-  defp queue_menu_update(
-         %{menu_update_timer: nil, last_update_at: last_update_at, throttle: throttle} = state
-       ) do
-    now = time(state)
-
-    timeout =
-      if now >= throttle + last_update_at + 10 do
-        10
-      else
-        last_update_at + throttle - now
-      end
-
-    timer = Process.send_after(self(), :menu_update, timeout)
-    %{state | menu_update_timer: timer}
-  end
-
-  defp queue_menu_update(%{menu_update_timer: timer} = state) do
-    case Process.read_timer(timer) do
-      false -> queue_menu_update(%{state | menu_update_timer: nil})
-      _ -> state
-    end
-  end
-
   @impl true
   def handle_call(:get, _from, %{menu: menu} = state) do
     {:reply, {:ok, menu}, state}
@@ -218,6 +179,8 @@ defmodule ExSni.Menu.Server do
     {:noreply, state}
   end
 
+  # Private methods
+
   # Menu queue is empty, so current menu is still valid
   # Return that we want to skip any dbus menu updates
   defp do_menu_update(%{menu_queue: []} = state) do
@@ -276,12 +239,7 @@ defmodule ExSni.Menu.Server do
            menu_queue: [%Menu{root: new_root} = new_menu]
          } = state
        ) do
-    IO.inspect(old_root, label: "[MENU DIFF] old root", limit: :infinity)
-    IO.inspect(new_root, label: "[MENU DIFF] new root", limit: :infinity)
-
-    menu_diff =
-      MenuDiff.diff(new_root, old_root)
-      |> IO.inspect(label: "[MENU DIFF] result")
+    menu_diff = MenuDiff.diff(new_root, old_root)
 
     case menu_diff do
       {-1, [], _} ->
@@ -338,6 +296,45 @@ defmodule ExSni.Menu.Server do
     end
   end
 
+  defp queue_menu_update(
+         %{menu_update_timer: nil, last_update_at: 0, first_update_throttle: throttle} = state
+       ) do
+    now = time(state)
+
+    timeout =
+      if now >= throttle + 10 do
+        10
+      else
+        throttle - now
+      end
+
+    timer = Process.send_after(self(), :menu_update, timeout)
+    %{state | menu_update_timer: timer}
+  end
+
+  defp queue_menu_update(
+         %{menu_update_timer: nil, last_update_at: last_update_at, throttle: throttle} = state
+       ) do
+    now = time(state)
+
+    timeout =
+      if now >= throttle + last_update_at + 10 do
+        10
+      else
+        last_update_at + throttle - now
+      end
+
+    timer = Process.send_after(self(), :menu_update, timeout)
+    %{state | menu_update_timer: timer}
+  end
+
+  defp queue_menu_update(%{menu_update_timer: timer} = state) do
+    case Process.read_timer(timer) do
+      false -> queue_menu_update(%{state | menu_update_timer: nil})
+      _ -> state
+    end
+  end
+
   defp trigger_layout_update_signal(%{menu: %Menu{version: version}} = state, item_id \\ 0) do
     queue_signal(:layout_updated, [version, item_id])
     state
@@ -358,22 +355,20 @@ defmodule ExSni.Menu.Server do
     state
   end
 
-  defp queue_items_properties_updated_signal(state, properties_updated, properties_removed \\ [])
+  # defp queue_items_properties_updated_signal(state, properties_updated, properties_removed \\ [])
 
-  defp queue_items_properties_updated_signal(state, [], []) do
-    state
-  end
+  # defp queue_items_properties_updated_signal(state, [], []) do
+  #   state
+  # end
 
-  defp queue_items_properties_updated_signal(
-         %{menu: %Menu{version: version}, items_properties_updated_queue: ipu_queue} = state,
-         properties_updated,
-         properties_removed
-       ) do
-    queued_item = {version, [properties_updated, properties_removed]}
-    %{state | items_properties_updated_queue: [queued_item | ipu_queue]}
-  end
-
-  # Private methods
+  # defp queue_items_properties_updated_signal(
+  #        %{menu: %Menu{version: version}, items_properties_updated_queue: ipu_queue} = state,
+  #        properties_updated,
+  #        properties_removed
+  #      ) do
+  #   queued_item = {version, [properties_updated, properties_removed]}
+  #   %{state | items_properties_updated_queue: [queued_item | ipu_queue]}
+  # end
 
   defp queue_signal(:layout_updated, [version, item_id]) do
     Process.send_after(
@@ -407,7 +402,7 @@ defmodule ExSni.Menu.Server do
   end
 
   defp service_send_signal(service_pid, signal, args) do
-    IO.inspect([signal, args], label: "Sending D-Bus signal", limit: :infinity)
+    # IO.inspect([signal, args], label: "Sending D-Bus signal", limit: :infinity)
 
     ExDBus.Service.send_signal(
       service_pid,
@@ -483,22 +478,21 @@ defmodule ExSni.Menu.Server do
   end
 
   defp method_reply("GetLayout", {parentId, depth, properties}, menu) do
-    IO.inspect({parentId, depth, properties},
-      label: "[#{System.os_time(:millisecond)}] [ExSni][Menu.Server] GetLayout"
-    )
+    # IO.inspect({parentId, depth, properties},
+    #   label: "[#{System.os_time(:millisecond)}] [ExSni][Menu.Server] GetLayout"
+    # )
 
     Menu.get_layout(menu, parentId, depth, properties)
-    |> IO.inspect(label: "GetLayout reply", limit: :infinity)
+    # |> IO.inspect(label: "GetLayout reply", limit: :infinity)
   end
 
   defp method_reply("GetGroupProperties", {ids, properties}, menu) do
-    IO.inspect({ids, properties},
-      label: "[#{System.os_time(:millisecond)}] [ExSni][Menu.Server] GetGroupProperties"
-    )
+    # IO.inspect({ids, properties},
+    #   label: "[#{System.os_time(:millisecond)}] [ExSni][Menu.Server] GetGroupProperties"
+    # )
 
-    result =
-      Menu.get_group_properties(menu, ids, properties)
-      |> IO.inspect(label: "GetGroupProperties reply", limit: :infinity)
+    result = Menu.get_group_properties(menu, ids, properties)
+    # |> IO.inspect(label: "GetGroupProperties reply", limit: :infinity)
 
     {:ok, [{:array, {:struct, [:int32, {:dict, :string, :variant}]}}], [result]}
   end
@@ -681,12 +675,10 @@ defmodule ExSni.Menu.Server do
   end
 
   defp set_current_menu(state, menu) do
-    IO.inspect(menu, label: "Set current menu", limit: :infinity)
     %{state | menu: menu}
   end
 
   defp set_menu_queue(state, queue) do
-    IO.inspect(queue, label: "Set menu queue", limit: :infinity)
     %{state | menu_queue: queue}
   end
 
