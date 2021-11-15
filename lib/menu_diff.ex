@@ -234,6 +234,7 @@ defmodule ExSni.MenuDiff do
     {id, last_id, new_ids_map} =
       case Map.get(mapping, node) do
         %{id: id} when not is_nil(id) ->
+          last_id = if id >= last_id, do: id + 1, else: last_id
           {id, last_id, new_ids_map}
 
         _ ->

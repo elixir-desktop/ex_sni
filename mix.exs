@@ -8,7 +8,7 @@ defmodule ExSni.MixProject do
       app: :ex_sni,
       name: "ExSNI",
       source_url: @source_url,
-      version: "0.2.0",
+      version: "0.2.1",
       elixir: "~> 1.10",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
@@ -26,17 +26,20 @@ defmodule ExSni.MixProject do
   end
 
   defp elixirc_paths(:dev), do: ["lib", "examples"]
+  defp elixirc_paths(:test), do: ["lib", "examples", "test/support"]
   defp elixirc_paths(_), do: ["lib"]
 
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
       {:ex_dbus, "~> 0.1.1"},
-      # {:ex_dbus, path: "../ex_dbus"},
       {:xdiff_plus, "~> 0.1"},
 
       # UUID generator
       {:uuid, "~> 1.1"},
+
+      # XML utility - ex_dbus already requires it
+      {:saxy, "~> 1.4.0"},
 
       # Development dialyzer
       {:dialyxir, "~> 1.1.0", only: [:dev, :test], runtime: false},
