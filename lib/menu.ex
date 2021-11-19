@@ -1,4 +1,6 @@
 defmodule ExSni.Menu do
+  require Logger
+
   alias ExSni.Menu.Item
   alias ExSni.Ref
 
@@ -157,7 +159,15 @@ defmodule ExSni.Menu do
 
   def onEvent(%__MODULE__{} = menu, eventId, id, data, timestamp) do
     case find_item(menu, id) do
-      %Item{callbacks: callbacks} -> run_events(callbacks, eventId, data, timestamp)
+      %Item{callbacks: callbacks} ->
+        run_events(callbacks, eventId, data, timestamp)
+
+      _ ->
+        Logger.debug(
+          "Menu.onEvent:: Failed to find menu item by id [#{id}] (eventId: #{eventId})"
+        )
+
+        nil
     end
   end
 
