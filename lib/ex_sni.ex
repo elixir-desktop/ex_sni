@@ -62,7 +62,7 @@ defmodule ExSni do
   on the Session Bus.
   - sni_pid - The pid of the ExSni Supervisor
   """
-  @spec is_supported?(pid()) :: boolean()
+  @spec is_supported?(GenServer.server()) :: boolean()
   def is_supported?(sni_pid) do
     case get_bus(sni_pid) do
       {:ok, nil} -> {:error, "Service has no DBUS connection"}
@@ -71,12 +71,16 @@ defmodule ExSni do
     end
   end
 
-  @spec close(pid()) :: :ok
+  @spec close(GenServer.server()) :: :ok
   def close(sni_pid) do
     Supervisor.stop(sni_pid)
   end
 
-  @spec get_menu(pid() | {:router, ExSni.Router.t()} | {:server, pid() | atom() | tuple()}) ::
+  @spec get_menu(
+          GenServer.server()
+          | {:router, ExSni.Router.t()}
+          | {:server, GenServer.server() | atom() | tuple()}
+        ) ::
           {:ok, nil | Menu.t()} | {:error, any()}
   def get_menu(sni_pid) when is_pid(sni_pid) or is_atom(sni_pid) do
     case get_menu_handle(sni_pid) do
@@ -88,7 +92,7 @@ defmodule ExSni do
     end
   end
 
-  @spec set_menu(pid(), Menu.t() | nil) :: {:ok, Menu.t() | nil} | {:error, any()}
+  @spec set_menu(GenServer.server(), Menu.t() | nil) :: {:ok, Menu.t() | nil} | {:error, any()}
   def set_menu(sni_pid, menu) do
     case get_menu_handle(sni_pid) do
       {:ok, handle} -> Menu.Server.set(handle, menu)
@@ -96,12 +100,16 @@ defmodule ExSni do
     end
   end
 
-  @spec update_menu(sni_pid :: pid(), parentId :: nil | integer(), menu :: nil | %Menu{}) :: any()
+  @spec update_menu(
+          sni_pid :: GenServer.server(),
+          parentId :: nil | integer(),
+          menu :: nil | %Menu{}
+        ) :: any()
   def update_menu(sni_pid, nil, menu) do
     set_menu(sni_pid, menu)
   end
 
-  @spec get_icon(pid()) :: {:ok, nil | Icon.t()} | {:error, any()}
+  @spec get_icon(GenServer.server()) :: {:ok, nil | Icon.t()} | {:error, any()}
   def get_icon(sni_pid) do
     case get_router(sni_pid) do
       {:ok, %ExSni.Router{icon: icon}} -> {:ok, icon}
@@ -122,7 +130,7 @@ defmodule ExSni do
     end
   end
 
-  @spec update_icon(sni_pid :: pid(), icon :: nil | %Icon{}) :: any()
+  @spec update_icon(sni_pid :: GenServer.server(), icon :: nil | %Icon{}) :: any()
   def update_icon(sni_pid, icon) do
     with {:ok, icon} <- set_icon(sni_pid, icon) do
       send_icon_signal(sni_pid, "NewIcon")

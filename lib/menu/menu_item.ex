@@ -3,7 +3,7 @@ defmodule ExSni.Menu.Item do
   alias ExSni.Menu
 
   defstruct id: 0,
-            uuid: "",
+            unique_int: 0,
             uid: "",
             type: :standard,
             enabled: true,
@@ -20,7 +20,7 @@ defmodule ExSni.Menu.Item do
   @type toggle_state() :: nil | :on | :off
   @type t() :: %__MODULE__{
           id: id(),
-          uuid: String.t(),
+          unique_int: integer(),
           uid: String.t(),
           type: item_type(),
           enabled: boolean(),
@@ -42,39 +42,39 @@ defmodule ExSni.Menu.Item do
   @spec separator() :: t()
   def separator() do
     %__MODULE__{id: 1, type: :separator}
-    |> assign_uuid()
+    |> assign_unique_int()
   end
 
   @spec root(children :: list(t())) :: t()
   def root(children \\ []) do
     %__MODULE__{id: 0, type: :root, children: children}
-    |> assign_uuid()
+    |> assign_unique_int()
   end
 
   @spec menu(children :: list(t())) :: t()
   def menu(children \\ []) do
     %__MODULE__{type: :menu, children: children}
-    |> assign_uuid()
+    |> assign_unique_int()
   end
 
   @spec checkbox() :: t()
   def checkbox(label \\ "") do
     %__MODULE__{type: :checkbox}
-    |> assign_uuid()
+    |> assign_unique_int()
     |> set_label(label)
   end
 
   @spec radio() :: t()
   def radio(label \\ "") do
     %__MODULE__{type: :radio}
-    |> assign_uuid()
+    |> assign_unique_int()
     |> set_label(label)
   end
 
   @spec standard(label :: String.t()) :: t()
   def standard(label \\ "") do
     %__MODULE__{type: :standard}
-    |> assign_uuid()
+    |> assign_unique_int()
     |> set_label(label)
   end
 
@@ -111,9 +111,9 @@ defmodule ExSni.Menu.Item do
     item
   end
 
-  @spec assign_uuid(t()) :: t()
-  def assign_uuid(%__MODULE__{} = item) do
-    %{item | uuid: UUID.uuid4()}
+  @spec assign_unique_int(t()) :: t()
+  def assign_unique_int(%__MODULE__{} = item) do
+    %{item | unique_int: System.unique_integer()}
   end
 
   @spec set_callbacks(t(), callbacks :: list(Menu.callback())) :: t()

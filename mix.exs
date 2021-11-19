@@ -35,9 +35,6 @@ defmodule ExSni.MixProject do
       {:ex_dbus, "~> 0.1.1"},
       {:xdiff_plus, "~> 0.1"},
 
-      # UUID generator
-      {:uuid, "~> 1.1"},
-
       # XML utility - ex_dbus already requires it
       {:saxy, "~> 1.4.0"},
 

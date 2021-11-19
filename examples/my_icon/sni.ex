@@ -18,7 +18,7 @@ defmodule MyIcon do
              menu: create_menu(),
              icon: create_icon()
            ),
-         {:ok, _} <- ExSni.register_icon(pid) do
+         :ok <- ExSni.register_icon(pid) do
       {:ok, pid}
     end
   end
