@@ -138,7 +138,12 @@ defmodule ExSni.Menu do
 
   def onAboutToShow(%__MODULE__{} = menu, id) do
     case find_item(menu, id) do
-      %Item{callbacks: callbacks} -> run_aboutToShow(callbacks)
+      %Item{callbacks: callbacks} ->
+        run_aboutToShow(callbacks)
+
+      _ ->
+        Logger.debug("Menu.onEvent:: Failed to find menu item by id [#{id}] (AboutToShow})")
+        false
     end
   end
 
