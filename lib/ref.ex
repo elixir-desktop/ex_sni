@@ -4,7 +4,7 @@ defmodule ExSni.Ref do
             interface: nil
 
   @type t() :: %__MODULE__{
-          pid: ExDBus.Service.pid() | nil,
+          pid: GenServer.server() | nil,
           path: String.t() | nil,
           interface: String.t() | nil
         }

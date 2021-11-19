@@ -21,7 +21,7 @@ defmodule ExSni.Bus do
   on the Session Bus.
   - bus_pid - The pid of the ExDBus.Bus GenServer
   """
-  @spec is_supported?(pid()) :: boolean()
+  @spec is_supported?(GenServer.server()) :: boolean()
   def is_supported?(bus_pid) do
     if ExDBus.Bus.name_has_owner(bus_pid, "org.kde.StatusNotifierWatcher") do
       ExDBus.Bus.has_interface?(

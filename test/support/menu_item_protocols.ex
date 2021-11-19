@@ -81,12 +81,12 @@ defimpl Saxy.Builder, for: ExSni.Menu.Item do
   end
 
   defp build_item_attrs(item) when is_map(item) do
-    [:id, :uuid, :uid, :type, :enabled, :visible, :label, :checked]
+    [:id, :uid, :type, :enabled, :visible, :label, :checked]
     |> build_attrs(item)
   end
 
   defp build_attrs(item) when is_map(item) do
-    [:id, :uuid, :uid, :enabled, :visible, :label, :checked]
+    [:id, :uid, :enabled, :visible, :label, :checked]
     |> build_attrs(item)
   end
 

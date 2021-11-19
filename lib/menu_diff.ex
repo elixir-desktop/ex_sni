@@ -1,7 +1,16 @@
 defmodule ExSni.MenuDiff do
+  @moduledoc """
+  Module to generate diff between two Menu roots (new and old)
+  """
   alias ExSni.Menu
   alias ExSni.Menu.Item
 
+  @spec diff(
+          newer_menu :: nil | Menu.t() | Menu.Item.t(),
+          previous_menu :: nil | Menu.t() | Menu.Item.t()
+        ) ::
+          {layout_id_to_update :: integer(), dbus_update_properties :: list(),
+           new_root :: Menu.Item.t() | nil}
   def diff(menu, old_menu) do
     new_root = get_root(menu)
     old_root = get_root(old_menu)

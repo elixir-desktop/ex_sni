@@ -1,4 +1,6 @@
 defmodule ExSni.Menu.Server do
+  @moduledoc false
+
   use GenServer
 
   alias ExSni.Menu
@@ -40,7 +42,7 @@ defmodule ExSni.Menu.Server do
             get_layout: method_tracking(),
             get_group_properties: method_tracking(),
             items_properties_updated_queue: list(),
-            dbus_service: nil | pid() | {:via, atom(), any()},
+            dbus_service: nil | GenServer.server(),
             menu_queue: list(Menu.t()),
             throttle: non_neg_integer(),
             first_update_throttle: non_neg_integer(),
@@ -203,6 +205,7 @@ defmodule ExSni.Menu.Server do
        ) do
     # Increment the version of an empty menu
     menu = %{old_menu | root: nil, version: old_version + 1}
+
     # Update the queue
     # Send a LayoutUpdated signal, so that D-Bus can fetch the new empty menu
 
@@ -492,6 +495,7 @@ defmodule ExSni.Menu.Server do
     # )
 
     result = Menu.get_group_properties(menu, ids, properties)
+
     # |> IO.inspect(label: "GetGroupProperties reply", limit: :infinity)
 
     {:ok, [{:array, {:struct, [:int32, {:dict, :string, :variant}]}}], [result]}
