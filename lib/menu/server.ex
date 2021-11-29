@@ -22,6 +22,7 @@ defmodule ExSni.Menu.Server do
 
   defmodule State do
     defstruct menu: %Menu{version: 1},
+              backup_server: nil,
               menu_update_timer: nil,
               last_update_at: 0,
               get_layout: {0, nil},
@@ -37,6 +38,7 @@ defmodule ExSni.Menu.Server do
             {last_requested_timestamp :: non_neg_integer(), payload :: any()}
     @type t() :: %__MODULE__{
             menu: Menu.t(),
+            backup_server: nil | GenServer.server(),
             last_update_at: non_neg_integer(),
             menu_update_timer: nil | reference(),
             get_layout: method_tracking(),
@@ -60,17 +62,22 @@ defmodule ExSni.Menu.Server do
 
   @impl true
   def init(options) do
+    backup_server = Keyword.get(options, :backup_server)
+
     init_menu =
       case Keyword.get(options, :menu, nil) do
         %Menu{} = menu -> menu
         _ -> %Menu{version: 1}
       end
 
-    state = %State{
-      menu: init_menu,
-      dbus_service: Keyword.get(options, :dbus_service, nil),
-      started_at: time()
-    }
+    state =
+      %State{
+        menu: init_menu,
+        dbus_service: Keyword.get(options, :dbus_service, nil),
+        started_at: time(),
+        backup_server: backup_server
+      }
+      |> restore_backup_menu()
 
     {:ok, state}
   end
@@ -247,7 +254,7 @@ defmodule ExSni.Menu.Server do
     case menu_diff do
       {-1, [], _} ->
         # No changes between the menus.
-        menu = %{new_menu | version: old_version}
+        menu = %{new_menu | version: old_version, root: old_root}
 
         # Return that there's no update, and clear the queue.
         {:skip,
@@ -305,7 +312,7 @@ defmodule ExSni.Menu.Server do
     now = time(state)
 
     timeout =
-      if now >= throttle + 10 do
+      if now >= throttle do
         10
       else
         throttle - now
@@ -321,7 +328,7 @@ defmodule ExSni.Menu.Server do
     now = time(state)
 
     timeout =
-      if now >= throttle + last_update_at + 10 do
+      if now >= throttle + last_update_at do
         10
       else
         last_update_at + throttle - now
@@ -679,7 +686,34 @@ defmodule ExSni.Menu.Server do
   end
 
   defp set_current_menu(state, menu) do
-    %{state | menu: menu}
+    backup_current_menu(%{state | menu: menu})
+  end
+
+  defp restore_backup_menu(%{backup_server: nil} = state) do
+    state
+  end
+
+  defp restore_backup_menu(%{backup_server: server, menu: init_menu} = state) do
+    try do
+      menu = GenServer.call(server, {:restore_menu, init_menu})
+      %{state | menu: menu}
+    rescue
+      _error -> state
+    end
+  end
+
+  defp backup_current_menu(%{backup_server: nil} = state) do
+    state
+  end
+
+  defp backup_current_menu(%{backup_server: server, menu: menu} = state) do
+    try do
+      GenServer.cast(server, {:save_menu, menu})
+    rescue
+      _ -> :ok
+    end
+
+    state
   end
 
   defp set_menu_queue(state, queue) do

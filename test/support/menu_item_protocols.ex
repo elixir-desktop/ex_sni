@@ -26,8 +26,9 @@ end
 
 defimpl ExSni.XML.Builder, for: List do
   def encode!(list) do
-    Enum.map(list, &ExSni.XML.Builder.encode!/1)
-    |> Enum.join("")
+    # Enum.map(list, &ExSni.XML.Builder.encode!/1)
+    # |> Enum.join("")
+    Enum.map_join(list, "", &ExSni.XML.Builder.encode!/1)
   end
 end
 

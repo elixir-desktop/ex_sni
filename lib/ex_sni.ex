@@ -15,6 +15,7 @@ defmodule ExSni do
          {:ok, menu} <- get_optional_menu(opts) do
       menu_server_pid = {:via, Registry, {ExSniRegistry, "menu_server"}}
       dbus_service_pid = {:via, Registry, {ExSniRegistry, "dbus_service"}}
+      backup_store_pid = {:via, Registry, {ExSniRegistry, "menu_store"}}
 
       router = %ExSni.Router{
         icon: icon,
@@ -33,12 +34,24 @@ defmodule ExSni do
              ]},
           restart: :transient
         },
+        %{
+          id: Menu.BackupStore,
+          start: {Menu.BackupStore, :start_link, [[], [name: backup_store_pid]]},
+          restart: :transient
+        },
         # Menu versions server
         %{
           id: Menu.Server,
           start:
             {Menu.Server, :start_link,
-             [[menu: menu, dbus_service: dbus_service_pid], [name: menu_server_pid]]},
+             [
+               [
+                 menu: menu,
+                 dbus_service: dbus_service_pid,
+                 backup_server: backup_store_pid
+               ],
+               [name: menu_server_pid]
+             ]},
           restart: :transient
         },
         {Task.Supervisor, name: ExSni.Task.Supervisor}
@@ -103,7 +116,7 @@ defmodule ExSni do
   @spec update_menu(
           sni_pid :: GenServer.server(),
           parentId :: nil | integer(),
-          menu :: nil | %Menu{}
+          menu :: nil | Menu.t()
         ) :: any()
   def update_menu(sni_pid, nil, menu) do
     set_menu(sni_pid, menu)
@@ -130,7 +143,7 @@ defmodule ExSni do
     end
   end
 
-  @spec update_icon(sni_pid :: GenServer.server(), icon :: nil | %Icon{}) :: any()
+  @spec update_icon(sni_pid :: GenServer.server(), icon :: nil | Icon.t()) :: any()
   def update_icon(sni_pid, icon) do
     with {:ok, icon} <- set_icon(sni_pid, icon) do
       send_icon_signal(sni_pid, "NewIcon")
