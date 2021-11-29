@@ -212,10 +212,19 @@ defmodule ExSni.Menu do
 
   defp get_callbacks(callbacks, eventId) do
     callbacks
-    |> Enum.filter(&is_tuple/1)
-    |> Enum.filter(&(elem(&1, 0) == eventId))
+    # |> Enum.filter(&is_tuple/1)
+    # |> Enum.filter(&(elem(&1, 0) == eventId))
+    |> Enum.filter(&has_event_id(&1, eventId))
     |> Enum.map(&elem(&1, 1))
     |> Enum.filter(&is_function(&1))
+  end
+
+  defp has_event_id(item, eventId) when is_tuple(item) do
+    elem(item, 0) == eventId
+  end
+
+  defp has_event_id(_, _) do
+    false
   end
 
   @spec find_child(list(Item.t()), non_neg_integer()) :: nil | Item.t()

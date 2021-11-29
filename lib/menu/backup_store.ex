@@ -1,4 +1,8 @@
 defmodule ExSni.Menu.BackupStore do
+  @moduledoc """
+  A GenServer that stores the menu for Menu.Server
+  and allows Menu.Server to retrieve it on init/restart
+  """
   use GenServer
 
   def start_link(opts, gen_opts \\ []) do
