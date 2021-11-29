@@ -15,6 +15,7 @@ defmodule ExSni do
          {:ok, menu} <- get_optional_menu(opts) do
       menu_server_pid = {:via, Registry, {ExSniRegistry, "menu_server"}}
       dbus_service_pid = {:via, Registry, {ExSniRegistry, "dbus_service"}}
+      backup_store_pid = {:via, Registry, {ExSniRegistry, "menu_store"}}
 
       router = %ExSni.Router{
         icon: icon,
@@ -33,12 +34,24 @@ defmodule ExSni do
              ]},
           restart: :transient
         },
+        %{
+          id: Menu.BackupStore,
+          start: {Menu.BackupStore, :start_link, [[], [name: backup_store_pid]]},
+          restart: :transient
+        },
         # Menu versions server
         %{
           id: Menu.Server,
           start:
             {Menu.Server, :start_link,
-             [[menu: menu, dbus_service: dbus_service_pid], [name: menu_server_pid]]},
+             [
+               [
+                 menu: menu,
+                 dbus_service: dbus_service_pid,
+                 backup_server: backup_store_pid
+               ],
+               [name: menu_server_pid]
+             ]},
           restart: :transient
         },
         {Task.Supervisor, name: ExSni.Task.Supervisor}
