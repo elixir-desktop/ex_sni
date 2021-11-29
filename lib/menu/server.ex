@@ -312,7 +312,7 @@ defmodule ExSni.Menu.Server do
     now = time(state)
 
     timeout =
-      if now >= throttle + 10 do
+      if now >= throttle do
         10
       else
         throttle - now
@@ -328,7 +328,7 @@ defmodule ExSni.Menu.Server do
     now = time(state)
 
     timeout =
-      if now >= throttle + last_update_at + 10 do
+      if now >= throttle + last_update_at do
         10
       else
         last_update_at + throttle - now
