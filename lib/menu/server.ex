@@ -247,7 +247,7 @@ defmodule ExSni.Menu.Server do
     case menu_diff do
       {-1, [], _} ->
         # No changes between the menus.
-        menu = %{new_menu | version: old_version}
+        menu = %{new_menu | version: old_version, root: old_root}
 
         # Return that there's no update, and clear the queue.
         {:skip,
