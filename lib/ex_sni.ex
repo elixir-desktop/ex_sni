@@ -78,8 +78,8 @@ defmodule ExSni do
   @spec is_supported?(GenServer.server()) :: boolean()
   def is_supported?(sni_pid) do
     case get_bus(sni_pid) do
-      {:ok, nil} -> {:error, "Service has no DBUS connection"}
-      {:ok, bus_pid} -> Bus.is_supported?(bus_pid)
+      nil -> {:error, "Service has no DBUS connection"}
+      bus_pid when is_pid(bus_pid) -> Bus.is_supported?(bus_pid)
       error -> error
     end
   end
