@@ -29,7 +29,7 @@ defmodule ExSni do
           start:
             {ExDBus.Service, :start_link,
              [
-               [name: service_name, schema: ExSni.Schema, router: router],
+               [name: service_name, schema: ExSni.Schema, router: router, cookie: :system_user],
                [name: dbus_service_pid]
              ]},
           restart: :transient
