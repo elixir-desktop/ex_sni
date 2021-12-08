@@ -78,9 +78,33 @@ defmodule ExSni do
   @spec is_supported?(GenServer.server()) :: boolean()
   def is_supported?(sni_pid) do
     case get_bus(sni_pid) do
-      nil -> {:error, "Service has no DBUS connection"}
+      nil -> false
       bus_pid when is_pid(bus_pid) -> Bus.is_supported?(bus_pid)
-      error -> error
+      _ -> false
+    end
+  end
+
+  @doc """
+  Returns {:ok, sni_pid} if there is a StatusNotifierWatcher available
+  on the Session Bus. Returns {:error, reason} otherwise.
+  - sni_pid - The pid of the ExSni Supervisor
+  """
+  @spec get_supported(GenServer.server()) ::
+          {:ok, bus_pid :: GenServer.server()} | {:error, reason :: binary()}
+  def get_supported(sni_pid) do
+    case get_bus(sni_pid) do
+      nil ->
+        {:error, "Service has no DBUS connection"}
+
+      bus_pid when is_pid(bus_pid) ->
+        if Bus.is_supported?(bus_pid) do
+          {:ok, bus_pid}
+        else
+          {:error, "Unable to connect to StatusNotifierWatcher over D-Bus"}
+        end
+
+      error ->
+        error
     end
   end
 
