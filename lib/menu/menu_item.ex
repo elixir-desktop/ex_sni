@@ -3,7 +3,6 @@ defmodule ExSni.Menu.Item do
   alias ExSni.Menu
 
   defstruct id: 0,
-            unique_int: 0,
             uid: "",
             type: :standard,
             enabled: true,
@@ -20,7 +19,6 @@ defmodule ExSni.Menu.Item do
   @type toggle_state() :: nil | :on | :off
   @type t() :: %__MODULE__{
           id: id(),
-          unique_int: integer(),
           uid: String.t(),
           type: item_type(),
           enabled: boolean(),
@@ -42,39 +40,33 @@ defmodule ExSni.Menu.Item do
   @spec separator() :: t()
   def separator() do
     %__MODULE__{id: 1, type: :separator}
-    |> assign_unique_int()
   end
 
   @spec root(children :: list(t())) :: t()
   def root(children \\ []) do
     %__MODULE__{id: 0, type: :root, children: children}
-    |> assign_unique_int()
   end
 
   @spec menu(children :: list(t())) :: t()
   def menu(children \\ []) do
     %__MODULE__{type: :menu, children: children}
-    |> assign_unique_int()
   end
 
   @spec checkbox() :: t()
   def checkbox(label \\ "") do
     %__MODULE__{type: :checkbox}
-    |> assign_unique_int()
     |> set_label(label)
   end
 
   @spec radio() :: t()
   def radio(label \\ "") do
     %__MODULE__{type: :radio}
-    |> assign_unique_int()
     |> set_label(label)
   end
 
   @spec standard(label :: String.t()) :: t()
   def standard(label \\ "") do
     %__MODULE__{type: :standard}
-    |> assign_unique_int()
     |> set_label(label)
   end
 
@@ -88,7 +80,7 @@ defmodule ExSni.Menu.Item do
   To store custom ID (e.g. "id" attribute), use `uid` property and `set_uid/2`
   """
   @spec set_id(t(), id :: id()) :: t()
-  def set_id(%__MODULE__{type: type} = item, id) when type not in [:root, :separator] do
+  def set_id(%__MODULE__{type: type} = item, id) when type not in [:root] do
     %{item | id: id}
   end
 
@@ -109,11 +101,6 @@ defmodule ExSni.Menu.Item do
 
   def set_label(item, _) do
     item
-  end
-
-  @spec assign_unique_int(t()) :: t()
-  def assign_unique_int(%__MODULE__{} = item) do
-    %{item | unique_int: System.unique_integer()}
   end
 
   @spec set_callbacks(t(), callbacks :: list(Menu.callback())) :: t()
@@ -493,79 +480,6 @@ defmodule ExSni.Menu.Item do
 
     defp default(value) do
       {:default, value}
-    end
-  end
-
-  defimpl Xtree.Protocol do
-    def name(%{type: :separator}) do
-      "hr"
-    end
-
-    def name(%{type: type}) when type in [:root, :menu] do
-      "menu"
-    end
-
-    def name(_) do
-      "item"
-    end
-
-    def children(%{children: children}) do
-      children
-    end
-
-    def type(_) do
-      :element
-    end
-
-    def value(%{type: :separator}) do
-      ""
-    end
-
-    def value(%{type: type} = node) when type in [:root, :menu] do
-      default_value(node)
-    end
-
-    def value(%{type: type, checked: checked} = node) do
-      "type=#{type};checked=#{checked}" <> default_value(node)
-    end
-
-    # Maybe HANDLE ICON into value
-
-    def value(node) do
-      default_value(node)
-    end
-
-    def id(%{uid: uid}) do
-      uid
-    end
-
-    defp default_value(%{
-           uid: uid,
-           label: label,
-           enabled: enabled,
-           visible: visible,
-           callbacks: callbacks
-         }) do
-      "id=#{uid};enabled=#{enabled};visible=#{visible};label=#{label}" <>
-        stringify_callbacks(callbacks)
-    end
-
-    defp stringify_callbacks(callbacks) do
-      callbacks
-      |> cb_to_attrs_string()
-      |> Enum.join(";")
-    end
-
-    defp cb_to_attrs_string([]) do
-      []
-    end
-
-    defp cb_to_attrs_string([{_, _, {attr_name, attr_value}} | callbacks]) do
-      ["#{attr_name}=#{attr_value}" | cb_to_attrs_string(callbacks)]
-    end
-
-    defp cb_to_attrs_string([_ | callbacks]) do
-      cb_to_attrs_string(callbacks)
     end
   end
 end
