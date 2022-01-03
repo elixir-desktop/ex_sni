@@ -33,7 +33,7 @@ defmodule ExSni.MixProject do
   defp deps do
     [
       {:ex_dbus, "~> 0.1"},
-      {:xdiff_plus, "~> 0.1"},
+      {:debouncer, "~> 0.1"},
 
       # XML utility - ex_dbus already requires it
       {:saxy, "~> 1.4.0"},

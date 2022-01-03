@@ -4,7 +4,6 @@ defmodule ExSni.Menu.Server do
   use GenServer
 
   alias ExSni.Menu
-  alias ExSni.MenuDiff
 
   defmodule SignalsState do
     defstruct layout_updated: {0, false},
@@ -23,11 +22,9 @@ defmodule ExSni.Menu.Server do
   defmodule State do
     defstruct menu: %Menu{version: 1},
               backup_server: nil,
-              menu_update_timer: nil,
               last_update_at: 0,
               get_layout: {0, nil},
               get_group_properties: {0, nil},
-              items_properties_updated_queue: [],
               dbus_service: nil,
               menu_queue: [],
               throttle: 600,
@@ -40,10 +37,8 @@ defmodule ExSni.Menu.Server do
             menu: Menu.t(),
             backup_server: nil | GenServer.server(),
             last_update_at: non_neg_integer(),
-            menu_update_timer: nil | reference(),
             get_layout: method_tracking(),
             get_group_properties: method_tracking(),
-            items_properties_updated_queue: list(),
             dbus_service: nil | GenServer.server(),
             menu_queue: list(Menu.t()),
             throttle: non_neg_integer(),
@@ -145,12 +140,8 @@ defmodule ExSni.Menu.Server do
   end
 
   @impl true
-  def handle_info(:menu_update, %{menu_update_timer: timer} = state) do
+  def handle_info(:menu_update, state) do
     now = time(state)
-
-    unless timer == nil do
-      Process.cancel_timer(timer)
-    end
 
     state =
       case do_menu_update(state) do
@@ -161,14 +152,21 @@ defmodule ExSni.Menu.Server do
           %{state | last_update_at: now}
       end
 
-    {:noreply, %{state | menu_update_timer: nil}}
+    {:noreply, state}
   end
 
   def handle_info(
         {:signal_layout_updated, [version, item_id]},
         %{dbus_service: dbus_service} = state
       ) do
-    send_dbus_signal(dbus_service, "LayoutUpdated", [version, item_id])
+    Debouncer.immediate(
+      {__MODULE__, self(), "LayoutUpdated"},
+      fn ->
+        send_dbus_signal(dbus_service, "LayoutUpdated", [version, item_id])
+      end,
+      3000
+    )
+
     {:noreply, state}
   end
 
@@ -225,8 +223,7 @@ defmodule ExSni.Menu.Server do
 
   # Current menu is nil, no reset pending and full new menu
   defp do_menu_update(
-         %{menu: %Menu{root: nil, version: old_version}, menu_queue: [{:nodiff, new_menu}]} =
-           state
+         %{menu: %Menu{version: old_version}, menu_queue: [{:nodiff, new_menu}]} = state
        ) do
     if menu_empty?(new_menu) do
       {:skip, set_menu_queue(state, [])}
@@ -245,155 +242,41 @@ defmodule ExSni.Menu.Server do
   # No reset pending, just a possible menu update
   defp do_menu_update(
          %{
-           menu: %Menu{root: old_root, version: old_version},
-           menu_queue: [%Menu{root: new_root} = new_menu]
+           menu: %Menu{version: old_version},
+           menu_queue: [%Menu{} = new_menu]
          } = state
        ) do
-    menu_diff = MenuDiff.diff(new_root, old_root)
-
-    case menu_diff do
-      {-1, [], _} ->
-        # No changes between the menus.
-        menu = %{new_menu | version: old_version, root: old_root}
-
-        # Return that there's no update, and clear the queue.
-        {:skip,
-         state
-         |> set_current_menu(menu)
-         |> set_menu_queue([])}
-
-      {-1, updates, new_root} ->
-        # No layout changes, but we have to send some updated properties
-        menu = %{new_menu | version: old_version + 1, root: new_root}
-
-        {:ok,
-         state
-         |> set_current_menu(menu)
-         |> set_menu_queue([])
-         |> trigger_items_properties_updated_signal(updates)}
-
-      {-2, [], new_root} ->
-        # This means that the new menu is a completely different menu
-        # And it's better to quickly reset the whole D-Bus menu
-        # and then send the new menu.
-
-        next_menu = %{new_menu | version: old_version + 2, root: new_root}
-
-        state
-        |> add_menu_to_queue(:reset)
-        |> add_menu_to_queue({:nodiff, next_menu})
-        |> do_menu_update()
-
-      {0, [], new_root} ->
-        # Just a layout change, but no properties updated
-        menu = %{new_menu | version: old_version + 1, root: new_root}
-
-        {:ok,
-         state
-         |> set_current_menu(menu)
-         |> set_menu_queue([])
-         |> trigger_layout_update_signal()}
-
-      {0, updates, new_root} ->
-        menu = %{new_menu | version: old_version + 1, root: new_root}
-
-        {:ok,
-         state
-         |> set_current_menu(menu)
-         |> set_menu_queue([])
-         |> trigger_items_properties_updated_signal(updates)
-         |> trigger_layout_update_signal()}
+    if menu_empty?(new_menu) do
+      {:skip, set_menu_queue(state, [])}
+    else
+      menu = %{new_menu | version: old_version + 1}
+      # Update the queue
+      # Send a LayoutUpdated signal, so that D-Bus can fetch the new empty menu
+      {:ok,
+       state
+       |> set_current_menu(menu)
+       |> set_menu_queue([])
+       |> trigger_layout_update_signal()}
     end
   end
 
-  defp queue_menu_update(
-         %{menu_update_timer: nil, last_update_at: 0, first_update_throttle: throttle} = state
-       ) do
-    now = time(state)
+  defp queue_menu_update(state) do
+    pid = self()
 
-    timeout =
-      if now >= throttle do
-        10
-      else
-        throttle - now
-      end
+    Debouncer.immediate(
+      {__MODULE__, pid, :menu_update},
+      fn ->
+        send(pid, :menu_update)
+      end,
+      1000
+    )
 
-    timer = Process.send_after(self(), :menu_update, timeout)
-    %{state | menu_update_timer: timer}
-  end
-
-  defp queue_menu_update(
-         %{menu_update_timer: nil, last_update_at: last_update_at, throttle: throttle} = state
-       ) do
-    now = time(state)
-
-    timeout =
-      if now >= throttle + last_update_at do
-        10
-      else
-        last_update_at + throttle - now
-      end
-
-    timer = Process.send_after(self(), :menu_update, timeout)
-    %{state | menu_update_timer: timer}
-  end
-
-  defp queue_menu_update(%{menu_update_timer: timer} = state) do
-    case Process.read_timer(timer) do
-      false -> queue_menu_update(%{state | menu_update_timer: nil})
-      _ -> state
-    end
+    state
   end
 
   defp trigger_layout_update_signal(%{menu: %Menu{version: version}} = state, item_id \\ 0) do
-    queue_signal(:layout_updated, [version, item_id])
+    send(self(), {:signal_layout_updated, [version, item_id]})
     state
-  end
-
-  defp trigger_items_properties_updated_signal(
-         state,
-         properties_updated,
-         properties_removed \\ []
-       )
-
-  defp trigger_items_properties_updated_signal(
-         state,
-         properties_updated,
-         properties_removed
-       ) do
-    queue_signal(:items_properties_updated, [properties_updated, properties_removed])
-    state
-  end
-
-  # defp queue_items_properties_updated_signal(state, properties_updated, properties_removed \\ [])
-
-  # defp queue_items_properties_updated_signal(state, [], []) do
-  #   state
-  # end
-
-  # defp queue_items_properties_updated_signal(
-  #        %{menu: %Menu{version: version}, items_properties_updated_queue: ipu_queue} = state,
-  #        properties_updated,
-  #        properties_removed
-  #      ) do
-  #   queued_item = {version, [properties_updated, properties_removed]}
-  #   %{state | items_properties_updated_queue: [queued_item | ipu_queue]}
-  # end
-
-  defp queue_signal(:layout_updated, [version, item_id]) do
-    Process.send_after(
-      self(),
-      {:signal_layout_updated, [version, item_id]},
-      3
-    )
-  end
-
-  defp queue_signal(:items_properties_updated, [properties_updated, properties_removed]) do
-    Process.send_after(
-      self(),
-      {:signal_items_properties_updated, [properties_updated, properties_removed]},
-      3
-    )
   end
 
   defp send_dbus_signal(service_pid, "LayoutUpdated" = signal, args) do
@@ -429,21 +312,9 @@ defmodule ExSni.Menu.Server do
          "GetLayout",
          {parentId, depth, properties},
          _from,
-         %{menu: %Menu{version: version} = menu, items_properties_updated_queue: ipu_queue} =
-           state
+         %{menu: %Menu{} = menu} = state
        ) do
-    {ipu_item, ipu_queue} = fetch_items_properties_updated(version, ipu_queue)
-
-    case ipu_item do
-      {_version, args} ->
-        queue_signal(:items_properties_updated, args)
-
-      _ ->
-        :ok
-    end
-
-    state = %{state | get_layout: {time(state), menu}, items_properties_updated_queue: ipu_queue}
-
+    state = %{state | get_layout: {time(state), menu}}
     {:reply, method_reply("GetLayout", {parentId, depth, properties}, menu), state}
   end
 
@@ -527,24 +398,6 @@ defmodule ExSni.Menu.Server do
   end
 
   # Other private functions
-
-  defp fetch_items_properties_updated(_version, []) do
-    {nil, []}
-  end
-
-  defp fetch_items_properties_updated(version, [{version, _} = item | versions]) do
-    {_, list} = fetch_items_properties_updated(version, versions)
-    {item, list}
-  end
-
-  defp fetch_items_properties_updated(version, [{v, _} = keep | versions]) do
-    if v < version do
-      fetch_items_properties_updated(version, versions)
-    else
-      {item, list} = fetch_items_properties_updated(version, versions)
-      {item, [keep | list]}
-    end
-  end
 
   # A menu queue (`menu_queue`) holds the next menus to process
   # Queueing a menu will always take care of pruning the menu queue so that
@@ -685,8 +538,32 @@ defmodule ExSni.Menu.Server do
     set_menu_queue(state, [new_menu])
   end
 
-  defp set_current_menu(state, menu) do
+  defp set_current_menu(%{menu: old_menu} = state, %Menu{root: root} = menu) do
+    {last_id, version} =
+      case old_menu do
+        %Menu{last_id: last_id, version: version} -> {last_id, version}
+        nil -> {100, 1}
+      end
+
+    {root, last_id} = update_menu(root, last_id)
+    menu = %Menu{menu | version: version + 1, last_id: last_id, root: root}
     backup_current_menu(%{state | menu: menu})
+  end
+
+  defp update_menu(%Menu.Item{children: children} = item, id) do
+    {children, id} =
+      Enum.map_reduce(children, id, fn item = %Menu.Item{type: type}, id ->
+        id = id + 1
+        item = Menu.Item.set_id(item, id)
+
+        if type == :menu do
+          update_menu(item, id)
+        else
+          {item, id}
+        end
+      end)
+
+    {%Menu.Item{item | children: children}, id}
   end
 
   defp restore_backup_menu(%{backup_server: nil} = state) do
