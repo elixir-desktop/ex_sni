@@ -217,8 +217,7 @@ defmodule ExSni.Menu.Server do
     {:ok,
      state
      |> set_current_menu(menu)
-     |> set_menu_queue(menu_queue)
-     |> trigger_layout_update_signal()}
+     |> set_menu_queue(menu_queue)}
   end
 
   # Current menu is nil, no reset pending and full new menu
@@ -234,8 +233,7 @@ defmodule ExSni.Menu.Server do
       {:ok,
        state
        |> set_current_menu(menu)
-       |> set_menu_queue([])
-       |> trigger_layout_update_signal()}
+       |> set_menu_queue([])}
     end
   end
 
@@ -255,8 +253,7 @@ defmodule ExSni.Menu.Server do
       {:ok,
        state
        |> set_current_menu(menu)
-       |> set_menu_queue([])
-       |> trigger_layout_update_signal()}
+       |> set_menu_queue([])}
     end
   end
 
@@ -539,15 +536,21 @@ defmodule ExSni.Menu.Server do
   end
 
   defp set_current_menu(%{menu: old_menu} = state, %Menu{root: root} = menu) do
-    {last_id, version} =
-      case old_menu do
-        %Menu{last_id: last_id, version: version} -> {last_id, version}
-        nil -> {100, 1}
-      end
+    if old_menu != nil and strip_menu(old_menu.root) == strip_menu(root) do
+      state
+    else
+      {last_id, version} =
+        case old_menu do
+          %Menu{last_id: last_id, version: version} -> {last_id, version}
+          nil -> {100, 1}
+        end
 
-    {root, last_id} = update_menu(root, last_id)
-    menu = %Menu{menu | version: version + 1, last_id: last_id, root: root}
-    backup_current_menu(%{state | menu: menu})
+      {root, last_id} = update_menu(root, last_id)
+      menu = %Menu{menu | version: version + 1, last_id: last_id, root: root}
+
+      backup_current_menu(%{state | menu: menu})
+      |> trigger_layout_update_signal()
+    end
   end
 
   defp update_menu(%Menu.Item{children: children} = item, id) do
@@ -564,6 +567,23 @@ defmodule ExSni.Menu.Server do
       end)
 
     {%Menu.Item{item | children: children}, id}
+  end
+
+  defp strip_menu(nil), do: nil
+
+  defp strip_menu(%Menu.Item{children: children} = item) do
+    children =
+      Enum.map(children, fn item = %Menu.Item{type: type} ->
+        item = Menu.Item.set_id(item, nil)
+
+        if type == :menu do
+          strip_menu(item)
+        else
+          item
+        end
+      end)
+
+    %Menu.Item{item | children: children}
   end
 
   defp restore_backup_menu(%{backup_server: nil} = state) do
