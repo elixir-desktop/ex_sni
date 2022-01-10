@@ -218,7 +218,10 @@ defmodule ExSni.MenuDiffTest do
     {:ok, %{old_root: old_root, new_root: new_root}}
   end
 
-  test "something", %{old_root: old_root, new_root: new_root} do
+  test "Adding menu creates the proper diff and new root", %{
+    old_root: old_root,
+    new_root: new_root
+  } do
     {layout, updates, root} = MenuDiff.diff(new_root, old_root)
 
     assert layout == 0
@@ -226,6 +229,105 @@ defmodule ExSni.MenuDiffTest do
     assert String.replace(@old_menu, ~r/\n\s*/, "") == ExSni.XML.Builder.encode!(old_root)
     assert String.replace(@new_menu, ~r/\n\s*/, "") == ExSni.XML.Builder.encode!(new_root)
     assert String.replace(@next_menu, ~r/\n\s*/, "") == ExSni.XML.Builder.encode!(root)
+  end
+
+  test "Identifying the last id traverses child submenus too" do
+    old_menu = """
+    <root id="0" uid="" label="">
+      <item id="1" uid="" type="standard" label="Open"/>
+      <item id="2" uid="" type="separator" label=""/>
+      <menu id="3" uid="" label="DevTools - 10002000">
+        <item id="5" uid="" type="standard" label="Check for Update"/>
+        <menu id="6" uid="" label="View">
+          <item id="7" uid="" type="standard" label="Open Browser"/>
+          <item id="8" uid="" type="standard" label="Show Default Layout"/>
+          <item id="9" uid="" type="standard" label="Show Android Layout"/>
+          <item id="10" uid="" type="standard" label="Show iOS Layout"/>
+        </menu>
+        <menu id="16" uid="" label="View 2">
+          <item id="17" uid="" type="standard" label="Open Browser"/>
+          <item id="18" uid="" type="standard" label="Show Default Layout"/>
+          <item id="19" uid="" type="standard" label="Show Android Layout"/>
+          <item id="20" uid="" type="standard" label="Show iOS Layout"/>
+        </menu>
+        <item id="4" uid="" type="standard" label="Observer"/>
+      </menu>
+      <item id="3" uid="" type="standard" label="Quit"/>
+    </root>
+    """
+
+    new_menu = """
+    <root id="0" uid="" label="">
+      <item id="0" uid="" type="standard" label="Open"/>
+      <item id="0" uid="" type="separator" label=""/>
+      <menu id="0" uid="" label="DevTools - 10002000">
+        <item id="0" uid="" type="standard" label="Check for Update"/>
+        <menu id="0" uid="" label="View">
+          <item id="0" uid="" type="standard" label="Open Browser"/>
+          <item id="0" uid="" type="standard" label="Show Default Layout"/>
+          <item id="0" uid="" type="standard" label="Show Android Layout"/>
+          <item id="0" uid="" type="standard" label="Show iOS Layout"/>
+        </menu>
+        <menu id="0" uid="" label="View 3">
+          <item id="0" uid="" type="standard" label="Open Browser 3"/>
+          <item id="0" uid="" type="standard" label="Show Default Layout 3"/>
+        </menu>
+        <menu id="0" uid="" label="View 2">
+          <item id="0" uid="" type="standard" label="Open Browser"/>
+          <item id="0" uid="" type="standard" label="Show Default Layout"/>
+          <item id="0" uid="" type="standard" label="Show Android Layout"/>
+          <item id="0" uid="" type="standard" label="Show iOS Layout"/>
+        </menu>
+        <item id="0" uid="" type="standard" label="Observer"/>
+      </menu>
+      <item id="0" uid="" type="standard" label="Quit"/>
+    </root>
+    """
+
+    next_menu = """
+    <root id="0" uid="" label="">
+      <item id="1" uid="" type="standard" label="Open"/>
+      <item id="2" uid="" type="separator" label=""/>
+      <menu id="3" uid="" label="DevTools - 10002000">
+        <item id="5" uid="" type="standard" label="Check for Update"/>
+        <menu id="6" uid="" label="View">
+          <item id="7" uid="" type="standard" label="Open Browser"/>
+          <item id="8" uid="" type="standard" label="Show Default Layout"/>
+          <item id="9" uid="" type="standard" label="Show Android Layout"/>
+          <item id="10" uid="" type="standard" label="Show iOS Layout"/>
+        </menu>
+        <menu id="21" uid="" label="View 3">
+          <item id="22" uid="" type="standard" label="Open Browser 3"/>
+          <item id="23" uid="" type="standard" label="Show Default Layout 3"/>
+        </menu>
+        <menu id="16" uid="" label="View 2">
+          <item id="17" uid="" type="standard" label="Open Browser"/>
+          <item id="18" uid="" type="standard" label="Show Default Layout"/>
+          <item id="19" uid="" type="standard" label="Show Android Layout"/>
+          <item id="20" uid="" type="standard" label="Show iOS Layout"/>
+        </menu>
+        <item id="4" uid="" type="standard" label="Observer"/>
+      </menu>
+      <item id="3" uid="" type="standard" label="Quit"/>
+    </root>
+    """
+
+    old_root = build_root(old_menu)
+    new_root = build_root(new_menu)
+
+    {layout, updates, root} = MenuDiff.diff(new_root, old_root)
+
+    assert layout == 0
+    assert updates == []
+
+    assert String.replace(old_menu, ~r/\n\s*/, "") ==
+             ExSni.XML.Builder.encode!(old_root, only: [:id, :uid, :type, :label])
+
+    assert String.replace(new_menu, ~r/\n\s*/, "") ==
+             ExSni.XML.Builder.encode!(new_root, only: [:id, :uid, :type, :label])
+
+    assert String.replace(next_menu, ~r/\n\s*/, "") ==
+             ExSni.XML.Builder.encode!(root, only: [:id, :uid, :type, :label])
   end
 
   defp build_root(source) do
