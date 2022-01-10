@@ -198,7 +198,7 @@ defmodule ExSni.MenuDiff do
   end
 
   defp get_last_id([node | nodes], last_id, except_nodes) do
-    get_last_id(nodes, get_last_node_id(node, last_id, except_nodes))
+    get_last_id(nodes, get_last_id(node, last_id, except_nodes), except_nodes)
   end
 
   defp get_last_node_id(%{id: id}, last_id, []) do
