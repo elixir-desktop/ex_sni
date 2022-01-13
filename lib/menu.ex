@@ -11,7 +11,8 @@ defmodule ExSni.Menu do
             status: "normal",
             root: nil,
             last_id: 0,
-            callbacks: []
+            callbacks: [],
+            item_cache: %{}
 
   @type fn_callback() :: (... -> any())
   @type callback() :: {atom(), fn_callback()}
@@ -23,7 +24,8 @@ defmodule ExSni.Menu do
           status: String.t(),
           root: Item.t(),
           last_id: non_neg_integer(),
-          callbacks: list(callback())
+          callbacks: list(callback()),
+          item_cache: map()
         }
 
   @dbus_menu_item_type {:struct, [:int32, {:dict, :string, :variant}, {:array, :variant}]}
@@ -104,27 +106,36 @@ defmodule ExSni.Menu do
     0
   end
 
-  defp get_children(%__MODULE__{root: %{} = root}) do
+  def get_children(%__MODULE__{root: %{} = root}) do
     get_children(root)
   end
 
-  defp get_children(%{children: []}) do
+  def get_children(%{children: []}) do
     []
   end
 
-  defp get_children(%{children: children}) when is_list(children) do
+  def get_children(%{children: children}) when is_list(children) do
     Enum.reduce(children, [], fn child, acc ->
       children = get_children(child)
       [child | children] ++ acc
     end)
   end
 
-  defp get_children(_) do
+  def get_children(_) do
     []
   end
 
-  def find_item(%__MODULE__{root: %Item{} = root}, id) do
-    Item.find_item(root, id)
+  def find_item(%__MODULE__{root: %Item{} = root, item_cache: items}, id) do
+    case Item.find_item(root, id) do
+      nil ->
+        case Enum.find(items, fn {item, _} -> item.id == id end) do
+          nil -> nil
+          {item, _} -> item
+        end
+
+      other ->
+        other
+    end
   end
 
   def find_item(_, _) do

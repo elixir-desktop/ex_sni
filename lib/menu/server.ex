@@ -22,28 +22,16 @@ defmodule ExSni.Menu.Server do
   defmodule State do
     defstruct menu: %Menu{version: 1},
               backup_server: nil,
-              last_update_at: 0,
-              get_layout: {0, nil},
-              get_group_properties: {0, nil},
               dbus_service: nil,
-              menu_queue: [],
-              throttle: 600,
-              first_update_throttle: 1000,
-              started_at: 0
+              menu_queue: []
 
     @type method_tracking() ::
             {last_requested_timestamp :: non_neg_integer(), payload :: any()}
     @type t() :: %__MODULE__{
             menu: Menu.t(),
             backup_server: nil | GenServer.server(),
-            last_update_at: non_neg_integer(),
-            get_layout: method_tracking(),
-            get_group_properties: method_tracking(),
             dbus_service: nil | GenServer.server(),
-            menu_queue: list(Menu.t()),
-            throttle: non_neg_integer(),
-            first_update_throttle: non_neg_integer(),
-            started_at: number()
+            menu_queue: list(Menu.t())
           }
   end
 
@@ -69,7 +57,6 @@ defmodule ExSni.Menu.Server do
       %State{
         menu: init_menu,
         dbus_service: Keyword.get(options, :dbus_service, nil),
-        started_at: time(),
         backup_server: backup_server
       }
       |> restore_backup_menu()
@@ -141,18 +128,13 @@ defmodule ExSni.Menu.Server do
 
   @impl true
   def handle_info(:menu_update, state) do
-    now = time(state)
+    case do_menu_update(state) do
+      {:skip, state} ->
+        {:noreply, state}
 
-    state =
-      case do_menu_update(state) do
-        {:skip, state} ->
-          state
-
-        {:ok, state} ->
-          %{state | last_update_at: now}
-      end
-
-    {:noreply, state}
+      {:ok, state} ->
+        {:noreply, state}
+    end
   end
 
   def handle_info(
@@ -209,7 +191,7 @@ defmodule ExSni.Menu.Server do
            state
        ) do
     # Increment the version of an empty menu
-    menu = %{old_menu | root: nil, version: old_version + 1}
+    menu = %Menu{old_menu | root: nil, version: old_version + 1}
 
     # Update the queue
     # Send a LayoutUpdated signal, so that D-Bus can fetch the new empty menu
@@ -227,7 +209,7 @@ defmodule ExSni.Menu.Server do
     if menu_empty?(new_menu) do
       {:skip, set_menu_queue(state, [])}
     else
-      menu = %{new_menu | version: old_version + 1}
+      menu = %Menu{new_menu | version: old_version + 1}
       # Update the queue
       # Send a LayoutUpdated signal, so that D-Bus can fetch the new empty menu
       {:ok,
@@ -247,7 +229,7 @@ defmodule ExSni.Menu.Server do
     if menu_empty?(new_menu) do
       {:skip, set_menu_queue(state, [])}
     else
-      menu = %{new_menu | version: old_version + 1}
+      menu = %Menu{new_menu | version: old_version + 1}
       # Update the queue
       # Send a LayoutUpdated signal, so that D-Bus can fetch the new empty menu
       {:ok,
@@ -305,19 +287,12 @@ defmodule ExSni.Menu.Server do
 
   # Method handling
 
-  defp handle_method(
-         "GetLayout",
-         {parentId, depth, properties},
-         _from,
-         %{menu: %Menu{} = menu} = state
-       ) do
-    state = %{state | get_layout: {time(state), menu}}
-    {:reply, method_reply("GetLayout", {parentId, depth, properties}, menu), state}
+  defp handle_method("GetLayout", {parentId, depth, properties}, _from, state) do
+    {:reply, method_reply("GetLayout", {parentId, depth, properties}, state), state}
   end
 
-  defp handle_method("GetGroupProperties", {ids, properties}, _from, %{menu: menu} = state) do
-    state = %{state | get_group_properties: {time(state), menu}}
-    {:reply, method_reply("GetGroupProperties", {ids, properties}, menu), state}
+  defp handle_method("GetGroupProperties", {ids, properties}, _from, state) do
+    {:reply, method_reply("GetGroupProperties", {ids, properties}, state), state}
   end
 
   # This is called by the applet to notify the application
@@ -329,8 +304,8 @@ defmodule ExSni.Menu.Server do
   # Returns:
   #   - needUpdate::boolean() - Whether this AboutToShow event
   #                   should result in the menu being updated.
-  defp handle_method("AboutToShow", id, _from, %{menu: menu} = state) do
-    {:reply, method_reply("AboutToShow", id, menu), state}
+  defp handle_method("AboutToShow", id, _from, state) do
+    {:reply, method_reply("AboutToShow", id, state), state}
   end
 
   # This is called by the applet to notify the application
@@ -346,8 +321,8 @@ defmodule ExSni.Menu.Server do
   # Returns:
   #   - needUpdate::boolean() - Whether this AboutToShow event
   #                   should result in the menu being updated.
-  defp handle_method("Event", {id, eventId, data, timestamp}, _from, %{menu: menu} = state) do
-    {:reply, method_reply("Event", {id, eventId, data, timestamp}, menu), state}
+  defp handle_method("Event", {id, eventId, data, timestamp}, _from, state) do
+    {:reply, method_reply("Event", {id, eventId, data, timestamp}, state), state}
   end
 
   # Reject all other method calls
@@ -355,7 +330,7 @@ defmodule ExSni.Menu.Server do
     {:reply, :skip, state}
   end
 
-  defp method_reply("GetLayout", {parentId, depth, properties}, menu) do
+  defp method_reply("GetLayout", {parentId, depth, properties}, %{menu: menu}) do
     # IO.inspect({parentId, depth, properties},
     #   label: "[#{System.os_time(:millisecond)}] [ExSni][Menu.Server] GetLayout"
     # )
@@ -364,24 +339,23 @@ defmodule ExSni.Menu.Server do
     # |> IO.inspect(label: "GetLayout reply", limit: :infinity)
   end
 
-  defp method_reply("GetGroupProperties", {ids, properties}, menu) do
+  defp method_reply("GetGroupProperties", {ids, properties}, %{menu: menu}) do
     # IO.inspect({ids, properties},
     #   label: "[#{System.os_time(:millisecond)}] [ExSni][Menu.Server] GetGroupProperties"
     # )
 
     result = Menu.get_group_properties(menu, ids, properties)
-
     # |> IO.inspect(label: "GetGroupProperties reply", limit: :infinity)
 
     {:ok, [{:array, {:struct, [:int32, {:dict, :string, :variant}]}}], [result]}
   end
 
-  defp method_reply("AboutToShow", id, menu) do
+  defp method_reply("AboutToShow", id, %{menu: menu}) do
     ret = Menu.onAboutToShow(menu, id)
     {:ok, [:boolean], [ret]}
   end
 
-  defp method_reply("Event", {id, eventId, data, timestamp}, menu) do
+  defp method_reply("Event", {id, eventId, data, timestamp}, %{menu: menu}) do
     # IO.inspect({id, eventId, data, timestamp},
     #   label: "[#{System.os_time(:millisecond)}] [ExSni][Menu.Server] Menu OnEvent"
     # )
@@ -535,34 +509,60 @@ defmodule ExSni.Menu.Server do
     set_menu_queue(state, [new_menu])
   end
 
-  defp set_current_menu(%{menu: old_menu} = state, %Menu{root: root} = menu) do
-    if old_menu != nil and strip_menu(old_menu.root) == strip_menu(root) do
+  defp set_current_menu(
+         %State{menu: %{item_cache: items} = old_menu} = state,
+         %Menu{root: root} = menu
+       ) do
+    root = strip_menu(root)
+
+    if old_menu != nil and strip_menu(old_menu.root) == root do
       state
     else
       {last_id, version} =
         case old_menu do
-          %Menu{last_id: last_id, version: version} -> {last_id, version}
+          %Menu{last_id: last_id, version: version} -> {max(last_id, 100), version}
           nil -> {100, 1}
         end
 
-      {root, last_id} = update_menu(root, last_id)
-      menu = %Menu{menu | version: version + 1, last_id: last_id, root: root}
+      cache = Enum.map(items, fn {item, _time} -> {strip_menu(item), item} end) |> Map.new()
+      {root, last_id} = update_menu(root, last_id, cache)
 
-      backup_current_menu(%{state | menu: menu})
+      menu = %Menu{menu | version: version + 1, last_id: last_id, root: root}
+      now = System.os_time(:millisecond)
+
+      new_items =
+        Menu.get_children(old_menu)
+        |> Enum.map(fn item -> {item, now} end)
+        |> Map.new()
+
+      items =
+        Enum.reject(items, fn {_, time} -> now - time > 10_000 end)
+        |> Map.new()
+        |> Map.merge(new_items)
+
+      IO.puts("item_cache_size: #{map_size(items)}")
+
+      backup_current_menu(%State{state | menu: Map.put(menu, :item_cache, items)})
       |> trigger_layout_update_signal()
     end
   end
 
-  defp update_menu(%Menu.Item{children: children} = item, id) do
+  defp update_menu(%Menu.Item{children: children} = item, id, cache) do
     {children, id} =
       Enum.map_reduce(children, id, fn item = %Menu.Item{type: type}, id ->
-        id = id + 1
-        item = Menu.Item.set_id(item, id)
+        case cache[item] do
+          nil ->
+            id = id + 1
+            item = Menu.Item.set_id(item, id)
 
-        if type == :menu do
-          update_menu(item, id)
-        else
-          {item, id}
+            if type == :menu do
+              update_menu(item, id, cache)
+            else
+              {item, id}
+            end
+
+          old_item ->
+            {old_item, id}
         end
       end)
 
@@ -635,13 +635,5 @@ defmodule ExSni.Menu.Server do
 
   defp menu_empty?(%Menu{root: %Menu.Item{}}) do
     false
-  end
-
-  defp time() do
-    System.monotonic_time(:millisecond)
-  end
-
-  defp time(%{started_at: started_at}) do
-    time() - started_at
   end
 end
