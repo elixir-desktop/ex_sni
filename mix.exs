@@ -21,7 +21,7 @@ defmodule ExSni.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      extra_applications: [:logger]
+      extra_applications: [:logger, :telemetry]
     ]
   end
 
@@ -34,6 +34,7 @@ defmodule ExSni.MixProject do
     [
       {:ex_dbus, "~> 0.1"},
       {:xdiff_plus, "~> 0.1"},
+      {:telemetry, "~> 1.0"},
 
       # XML utility - ex_dbus already requires it
       {:saxy, "~> 1.4.0"},
