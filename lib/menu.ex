@@ -28,6 +28,15 @@ defmodule ExSni.Menu do
 
   @dbus_menu_item_type {:struct, [:int32, {:dict, :string, :variant}, {:array, :variant}]}
 
+  @spec get_root(t() | any()) :: Item.t() | nil
+  def get_root(%__MODULE__{root: root}) do
+    root
+  end
+
+  def get_root(_) do
+    nil
+  end
+
   @spec get_layout(t(), integer(), list(String.t())) ::
           {:ok, list(), list()} | {:error, binary(), binary()}
   def get_layout(%__MODULE__{} = menu, depth, properties) do
@@ -293,5 +302,41 @@ defimpl ExSni.DbusProtocol, for: ExSni.Menu do
         _ -> acc
       end
     end)
+  end
+end
+
+defimpl ExSni.XML.Builder, for: ExSni.Menu do
+  def build!(menu, []) do
+    Saxy.Builder.build(menu)
+  end
+
+  def build!(%{root: nil} = item, _opts) do
+    build!(item, [])
+  end
+
+  def build!(%{root: root} = item, opts) do
+    item
+    |> Map.put(root, ExSni.XML.Builder.build!(item, opts))
+    |> build!([])
+  end
+
+  def encode!(menu) do
+    menu
+    |> build!([])
+    |> Saxy.encode!()
+  end
+
+  def encode!(menu, opts) do
+    menu
+    |> build!(opts)
+    |> Saxy.encode!()
+  end
+end
+
+defimpl Saxy.Builder, for: ExSni.Menu do
+  import Saxy.XML
+
+  def build(%{version: version, root: root}) do
+    element("dbus_menu", [version: version], [Saxy.Builder.build(root)])
   end
 end

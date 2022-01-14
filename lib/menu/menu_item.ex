@@ -568,4 +568,82 @@ defmodule ExSni.Menu.Item do
       cb_to_attrs_string(callbacks)
     end
   end
+
+  defimpl ExSni.XML.Builder do
+    def build!(item, []) do
+      Saxy.Builder.build(item)
+    end
+
+    def build!(item, opts) do
+      built_item = build!(item, [])
+
+      case Keyword.get(opts, :only) do
+        [] ->
+          built_item
+
+        keys when is_list(keys) ->
+          only_keys(built_item, Enum.map(keys, &Atom.to_string/1))
+
+        _ ->
+          built_item
+      end
+    end
+
+    def encode!(item) do
+      item
+      |> build!([])
+      |> Saxy.encode!()
+    end
+
+    def encode!(item, opts) do
+      item
+      |> build!(opts)
+      |> Saxy.encode!()
+    end
+
+    defp only_keys(elem, []) do
+      elem
+    end
+
+    defp only_keys({tag, attrs, children}, keys) do
+      {
+        tag,
+        Enum.filter(attrs, fn {key, _} ->
+          Enum.member?(keys, key)
+        end),
+        Enum.map(children, &only_keys(&1, keys))
+      }
+    end
+  end
+
+  defimpl Saxy.Builder do
+    import Saxy.XML
+
+    def build(%{type: :root, children: children} = item) do
+      element("root", build_attrs(item), Enum.map(children, &build/1))
+    end
+
+    def build(%{type: :menu, children: children} = item) do
+      element("menu", build_attrs(item), Enum.map(children, &build/1))
+    end
+
+    def build(%{children: children} = item) do
+      element("item", build_item_attrs(item), Enum.map(children, &build/1))
+    end
+
+    defp build_item_attrs(item) when is_map(item) do
+      [:id, :uid, :type, :enabled, :visible, :label, :checked]
+      |> build_attrs(item)
+    end
+
+    defp build_attrs(item) when is_map(item) do
+      [:id, :uid, :enabled, :visible, :label, :checked]
+      |> build_attrs(item)
+    end
+
+    defp build_attrs(attrs, item) when is_list(attrs) do
+      attrs
+      |> Enum.map(fn attr -> {attr, Map.get(item, attr)} end)
+    end
+  end
 end
