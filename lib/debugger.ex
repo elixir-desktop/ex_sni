@@ -1,5 +1,5 @@
 defmodule ExSni.Debugger do
-  @module """
+  @moduledoc """
   Debugger module that attaches to telemetry events.
   Configurable using the EXSNI_DEBUG environment variable, with the following events,
   given as a comma-separated list:
@@ -295,22 +295,31 @@ defmodule ExSni.Debugger do
   end
 
   defp process_opts(opts) do
-    opts =
-      cond do
-        env_opts_contains?(opts, "all") ->
-          ["all"]
+    opts
+    |> process_filter_opts()
+    |> Enum.reduce([], &env_opt_to_event/2)
+  end
 
-        env_opts_contains?(opts, "menu") ->
+  defp process_filter_opts(opts) do
+    if env_opts_contains?(opts, "all") do
+      ["all"]
+    else
+      opts =
+        if env_opts_contains?(opts, "menu") do
           Enum.reject(opts, &(&1 in ["menu_diff", "menu_update", "menu_set"]))
+        else
+          opts
+        end
 
-        env_opts_contains?(opts, "dbus") ->
+      opts =
+        if env_opts_contains?(opts, "dbus") do
           Enum.reject(opts, &(&1 in ["dbus_method", "dbus_signal"]))
+        else
+          opts
+        end
 
-        true ->
-          []
-      end
-
-    Enum.reduce(opts, [], &env_opt_to_event/2)
+      opts
+    end
   end
 
   defp env_opts_contains?(opts, what) do
