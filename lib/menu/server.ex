@@ -540,8 +540,6 @@ defmodule ExSni.Menu.Server do
         |> Map.new()
         |> Map.merge(new_items)
 
-      IO.puts("item_cache_size: #{map_size(items)}")
-
       backup_current_menu(%State{state | menu: Map.put(menu, :item_cache, items)})
       |> trigger_layout_update_signal()
     end

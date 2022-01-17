@@ -80,7 +80,7 @@ defmodule ExSni.Menu.Item do
   To store custom ID (e.g. "id" attribute), use `uid` property and `set_uid/2`
   """
   @spec set_id(t(), id :: id()) :: t()
-  def set_id(%__MODULE__{type: type} = item, id) when type not in [:root, :separator] do
+  def set_id(%__MODULE__{type: type} = item, id) when type not in [:root] do
     %{item | id: id}
   end
 
