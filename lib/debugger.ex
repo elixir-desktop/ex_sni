@@ -286,11 +286,10 @@ defmodule ExSni.Debugger do
     |> case do
       {:ok, value} ->
         value
-        |> String.split(",")
-        |> Enum.reject(&(&1 == ""))
+        |> String.split(",", trim: true)
 
       :error ->
-        false
+        []
     end
     |> process_opts()
   end
@@ -306,6 +305,9 @@ defmodule ExSni.Debugger do
 
         env_opts_contains?(opts, "dbus") ->
           Enum.reject(opts, &(&1 in ["dbus_method", "dbus_signal"]))
+
+        true ->
+          []
       end
 
     Enum.reduce(opts, [], &env_opt_to_event/2)
