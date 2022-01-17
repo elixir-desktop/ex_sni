@@ -289,7 +289,7 @@ defmodule ExSni.Debugger do
         |> String.split(",")
         |> Enum.reject(&(&1 == ""))
 
-      {:error} ->
+      :error ->
         false
     end
     |> process_opts()
