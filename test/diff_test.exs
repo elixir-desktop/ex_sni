@@ -330,6 +330,296 @@ defmodule ExSni.MenuDiffTest do
              ExSni.XML.Builder.encode!(root, only: [:id, :uid, :type, :label])
   end
 
+  test "Fix node remove and inserts bug" do
+    old_menu = """
+    <root id="0" uid="" label="">
+      <item id="1" uid="" type="standard" label="Add Zone"/>
+      <item id="2" uid="" type="standard" label="Open"/>
+      <item id="3" uid="" type="standard" label="Pause Network"/>
+      <item id="4" uid="" type="standard" label="No Activity"/>
+      <item id="5" uid="" type="standard" label="Quit"/>
+    </root>
+    """
+
+    new_menu = """
+    <root id="0" uid="" label="">
+      <item id="0" uid="" type="standard" label="Open"/>
+      <item id="0" uid="" type="standard" label="Pause Network"/>
+      <item id="0" uid="" type="standard" label="No Activity"/>
+      <item id="0" uid="" type="standard" label="Quit"/>
+      <item id="0" uid="" type="separator" label=""/>
+      <item id="0" uid="" type="standard" label="Zones"/>
+      <menu id="0" uid="" label="   (Ze first)">
+        <item id="0" uid="" type="standard" label="Open Folder"/>
+        <item id="0" uid="" type="standard" label="Manage"/>
+        <item id="1" uid="" type="separator" label=""/>
+        <item id="0" uid="" type="standard" label="1 of 2 Online"/>
+        <item id="0" uid="" type="standard" label="10 bytes, 1 Files"/>
+      </menu>
+      <menu id="0" uid="" label="    (dunedain.diode) (dunedain.diode)">
+        <item id="0" uid="" type="standard" label="Open Folder"/>
+        <item id="0" uid="" type="standard" label="Manage"/>
+        <item id="1" uid="" type="separator" label=""/>
+        <item id="0" uid="" type="standard" label="1 of 1 Online"/>
+        <item id="0" uid="" type="standard" label="34 bytes, 1 Files"/>
+      </menu>
+      <menu id="0" uid="" label="   amazing zone #3">
+        <item id="0" uid="" type="standard" label="Open Folder"/>
+        <item id="0" uid="" type="standard" label="Manage"/>
+        <item id="1" uid="" type="separator" label=""/>
+        <item id="0" uid="" type="standard" label="1 of 1 Online"/>
+        <item id="0" uid="" type="standard" label="143.06mb, 62 Files"/>
+        <item id="1" uid="" type="separator" label=""/>
+        <item id="0" uid="" type="standard" label="Deleted block49 17d ago"/>
+        <item id="0" uid="" type="standard" label="Deleted block49 (copy) 17d ago"/>
+        <item id="0" uid="" type="standard" label="Deleted block49 (another c... 17d ago"/>
+        <item id="0" uid="" type="standard" label="Updated rand 136d ago"/>
+        <item id="0" uid="" type="standard" label="Deleted rand36 136d ago"/>
+      </menu>
+      <menu id="0" uid="" label="   Dunedain&apos;s zone">
+        <item id="0" uid="" type="standard" label="Open Folder"/>
+        <item id="0" uid="" type="standard" label="Manage"/>
+        <item id="1" uid="" type="separator" label=""/>
+        <item id="0" uid="" type="standard" label="1 of 1 Online"/>
+        <item id="0" uid="" type="standard" label="0 bytes, 0 Files"/>
+      </menu>
+      <menu id="0" uid="" label="   Testzone32">
+        <item id="0" uid="" type="standard" label="Open Folder"/>
+        <item id="0" uid="" type="standard" label="Manage"/>
+        <item id="1" uid="" type="separator" label=""/>
+        <item id="0" uid="" type="standard" label="1 of 1 Online"/>
+        <item id="0" uid="" type="standard" label="0 bytes, 0 Files"/>
+      </menu>
+    </root>
+    """
+
+    next_menu = """
+    <root id="0" label="">
+      <item id="2" type="standard" label="Open"/>
+      <item id="3" type="standard" label="Pause Network"/>
+      <item id="4" type="standard" label="No Activity"/>
+      <item id="5" type="standard" label="Quit"/>
+      <item id="6" type="separator" label=""/>
+      <item id="7" type="standard" label="Zones"/>
+      <menu id="8" label="   (Ze first)">
+        <item id="9" type="standard" label="Open Folder"/>
+        <item id="10" type="standard" label="Manage"/>
+        <item id="11" type="separator" label=""/>
+        <item id="12" type="standard" label="1 of 2 Online"/>
+        <item id="13" type="standard" label="10 bytes, 1 Files"/>
+      </menu>
+      <menu id="14" label="    (dunedain.diode) (dunedain.diode)">
+        <item id="15" type="standard" label="Open Folder"/>
+        <item id="16" type="standard" label="Manage"/>
+        <item id="17" type="separator" label=""/>
+        <item id="18" type="standard" label="1 of 1 Online"/>
+        <item id="19" type="standard" label="34 bytes, 1 Files"/>
+      </menu>
+      <menu id="20" label="   amazing zone #3">
+        <item id="21" type="standard" label="Open Folder"/>
+        <item id="22" type="standard" label="Manage"/>
+        <item id="23" type="separator" label=""/>
+        <item id="24" type="standard" label="1 of 1 Online"/>
+        <item id="25" type="standard" label="143.06mb, 62 Files"/>
+        <item id="26" type="separator" label=""/>
+        <item id="27" type="standard" label="Deleted block49 17d ago"/>
+        <item id="28" type="standard" label="Deleted block49 (copy) 17d ago"/>
+        <item id="29" type="standard" label="Deleted block49 (another c... 17d ago"/>
+        <item id="30" type="standard" label="Updated rand 136d ago"/>
+        <item id="31" type="standard" label="Deleted rand36 136d ago"/>
+      </menu>
+      <menu id="32" label="   Dunedain&apos;s zone">
+        <item id="33" type="standard" label="Open Folder"/>
+        <item id="34" type="standard" label="Manage"/>
+        <item id="35" type="separator" label=""/>
+        <item id="36" type="standard" label="1 of 1 Online"/>
+        <item id="37" type="standard" label="0 bytes, 0 Files"/>
+      </menu>
+      <menu id="38" label="   Testzone32">
+        <item id="39" type="standard" label="Open Folder"/>
+        <item id="40" type="standard" label="Manage"/>
+        <item id="41" type="separator" label=""/>
+        <item id="42" type="standard" label="1 of 1 Online"/>
+        <item id="43" type="standard" label="0 bytes, 0 Files"/>
+      </menu>
+    </root>
+    """
+
+    old_menu
+    |> from_menu()
+    |> to_menu(new_menu)
+    |> test_menu_diff()
+    |> assert_layout(0)
+    |> assert_updates([])
+    |> assert_menu(next_menu)
+  end
+
+  test "Insert and delete items in root" do
+    from_menu("""
+    <root id="0" label=""></root>
+    """)
+    |> to_menu("""
+    <root label="">
+    <item type="standard" label="Item 1"/>
+    </root>
+    """)
+    |> test_menu_diff()
+    |> assert_menu("""
+    <root id="0" label="">
+    <item id="1" type="standard" label="Item 1"/>
+    </root>
+    """)
+    |> to_menu("""
+    <root label="">
+    <item type="standard" label="Item 1"/>
+    <item type="separator" label=""/>
+    <item type="standard" label="Item 2"/>
+    </root>
+    """)
+    |> test_menu_diff()
+    |> assert_menu("""
+    <root id="0" label="">
+    <item id="1" type="standard" label="Item 1"/>
+    <item id="2" type="separator" label=""/>
+    <item id="3" type="standard" label="Item 2"/>
+    </root>
+    """)
+    |> to_menu("""
+    <root label="">
+    <item type="standard" label="Item 2"/>
+    </root>
+    """)
+    |> test_menu_diff()
+    |> assert_menu("""
+    <root id="0" label="">
+    <item id="3" type="standard" label="Item 2"/>
+    </root>
+    """)
+  end
+
+  test "Insert and delete items in submenus" do
+    from_menu("""
+      <root id="0" label=""></root>
+    """)
+    |> to_menu("""
+      <root id="0" label="">
+        <item id="0" type="standard" label="Item 1"/>
+        <item id="0" type="separator" label=""/>
+        <menu id="0" label=" Some submenu 1">
+          <item id="0" type="standard" label="Sub item 1"/>
+          <item id="0" type="separator" label=""/>
+          <item id="0" type="standard" label="Sub item 2"/>
+          <menu id="0" label="Some submenu 2">
+            <item id="0" type="standard" label="Sub item 3"/>
+          </menu>
+        </menu>
+      </root>
+    """)
+    |> test_menu_diff()
+    |> assert_menu("""
+    <root id="0" label="">
+        <item id="1" type="standard" label="Item 1"/>
+        <item id="2" type="separator" label=""/>
+        <menu id="3" label=" Some submenu 1">
+          <item id="4" type="standard" label="Sub item 1"/>
+          <item id="5" type="separator" label=""/>
+          <item id="6" type="standard" label="Sub item 2"/>
+          <menu id="7" label="Some submenu 2">
+            <item id="8" type="standard" label="Sub item 3"/>
+          </menu>
+        </menu>
+      </root>
+    """)
+    |> to_menu("""
+      <root id="0" label="">
+        <item id="0" type="standard" label="Item 1"/>
+        <item id="0" type="standard" label="Item 2"/>
+        <item id="0" type="separator" label=""/>
+        <menu id="0" label=" Some submenu 1">
+          <item id="0" type="standard" label="Sub item 1"/>
+          <item id="0" type="standard" label="Sub item 2"/>
+          <menu id="0" label="Some submenu 2">
+            <item id="0" type="standard" label="Sub item 3"/>
+            <item id="0" type="separator" label=""/>
+            <item id="0" type="standard" label="Sub item 4"/>
+          </menu>
+        </menu>
+        <item id="0" type="standard" label="Item 3"/>
+      </root>
+    """)
+    |> test_menu_diff()
+    |> assert_menu("""
+      <root id="0" label="">
+        <item id="1" type="standard" label="Item 1"/>
+        <item id="9" type="standard" label="Item 2"/>
+        <item id="2" type="separator" label=""/>
+        <menu id="3" label=" Some submenu 1">
+          <item id="4" type="standard" label="Sub item 1"/>
+          <item id="6" type="standard" label="Sub item 2"/>
+          <menu id="7" label="Some submenu 2">
+            <item id="8" type="standard" label="Sub item 3"/>
+            <item id="5" type="separator" label=""/>
+            <item id="10" type="standard" label="Sub item 4"/>
+          </menu>
+        </menu>
+        <item id="11" type="standard" label="Item 3"/>
+      </root>
+    """)
+  end
+
+  # Private utility functions
+
+  defp from_menu(old_menu) do
+    from_menu({nil, nil}, old_menu)
+  end
+
+  defp from_menu({_, new_root}, old_menu) do
+    {build_root(old_menu), new_root}
+  end
+
+  defp to_menu({old_root, _}, new_menu) do
+    {old_root, build_root(new_menu)}
+  end
+
+  defp to_menu({_layout, _updates, old_root}, new_menu) do
+    {old_root, build_root(new_menu)}
+  end
+
+  defp test_menu_diff({old_root, new_root}) do
+    assert {layout, updates, root} = MenuDiff.diff(new_root, old_root)
+    {layout, updates, root}
+  end
+
+  defp assert_menu(
+         {_, _, root} = diff_result,
+         expected_menu,
+         encode_opts \\ [only: [:id, :type, :label]]
+       ) do
+    expected_menu = trim_xml_menu(expected_menu)
+
+    assert expected_menu ==
+             ExSni.XML.Builder.encode!(root, encode_opts)
+
+    diff_result
+  end
+
+  defp assert_layout({layout, _, _} = diff_result, expected_layout) do
+    assert layout == expected_layout
+    diff_result
+  end
+
+  defp assert_updates({_, updates, _} = diff_result, expected_updates) do
+    assert updates == expected_updates
+    diff_result
+  end
+
+  defp trim_xml_menu(menu) when is_binary(menu) do
+    menu
+    |> String.replace(~r/^\s*/, "")
+    |> String.replace(~r/\s*$/, "")
+    |> String.replace(~r/\n\s*/, "")
+  end
+
   defp build_root(source) do
     case Saxy.SimpleForm.parse_string(source) do
       {:ok, {"root", _, children}} ->
@@ -358,7 +648,9 @@ defmodule ExSni.MenuDiffTest do
       %Item{type: :menu, children: children}
       |> Item.assign_unique_int()
 
-    Enum.reduce(attrs, node, fn {name, value}, node ->
+    attrs
+    |> Enum.reject(&(&1 == "type"))
+    |> Enum.reduce(node, fn {name, value}, node ->
       set_attr(node, name, value)
     end)
   end
