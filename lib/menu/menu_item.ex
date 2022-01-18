@@ -501,7 +501,11 @@ defmodule ExSni.Menu.Item do
       "hr"
     end
 
-    def name(%{type: type}) when type in [:root, :menu] do
+    def name(%{type: type}) when type in [:root] do
+      "root"
+    end
+
+    def name(%{type: type}) when type in [:menu] do
       "menu"
     end
 
@@ -526,7 +530,7 @@ defmodule ExSni.Menu.Item do
     end
 
     def value(%{type: type, checked: checked} = node) do
-      "type=#{type};checked=#{checked}" <> default_value(node)
+      "type=#{type};checked=#{checked};" <> default_value(node)
     end
 
     # Maybe HANDLE ICON into value
@@ -577,15 +581,23 @@ defmodule ExSni.Menu.Item do
     def build!(item, opts) do
       built_item = build!(item, [])
 
-      case Keyword.get(opts, :only) do
-        [] ->
-          built_item
+      built_item =
+        case Keyword.get(opts, :only) do
+          [] ->
+            built_item
 
-        keys when is_list(keys) ->
-          only_keys(built_item, Enum.map(keys, &Atom.to_string/1))
+          keys when is_list(keys) ->
+            only_keys(built_item, Enum.map(keys, &Atom.to_string/1))
 
-        _ ->
-          built_item
+          _ ->
+            built_item
+        end
+
+      if Keyword.get(opts, :no_children, false) == false do
+        built_item
+      else
+        {type, attrs, _} = built_item
+        {type, attrs, []}
       end
     end
 
@@ -611,7 +623,11 @@ defmodule ExSni.Menu.Item do
         Enum.filter(attrs, fn {key, _} ->
           Enum.member?(keys, key)
         end),
-        Enum.map(children, &only_keys(&1, keys))
+        if Enum.member?(keys, :children) do
+          []
+        else
+          Enum.map(children, &only_keys(&1, keys))
+        end
       }
     end
   end

@@ -511,7 +511,10 @@ defmodule ExSni.MenuDiff do
       {%{ref: node}, {:nop, %{ref: old_node}}}, {inserts, nops, mapping} ->
         {inserts, [{node, old_node} | nops], Map.put(mapping, node, old_node)}
 
-      {%{ref: node}, {_, %{ref: old_node}}}, {inserts, nops, mapping} ->
+      {%{ref: node}, {:mov, %{ref: old_node}}}, {inserts, nops, mapping} ->
+        {inserts, nops, Map.put(mapping, node, old_node)}
+
+      {%{ref: node}, {_op, %{ref: old_node}}}, {inserts, nops, mapping} ->
         {inserts, nops, Map.put(mapping, node, old_node)}
 
       _, acc ->
@@ -529,8 +532,46 @@ defmodule ExSni.MenuDiff do
       {%{ref: node}, :del}, {updates, deletes} ->
         {updates, [{node, nil} | deletes]}
 
-      _, acc ->
+      _x, acc ->
         acc
     end)
   end
+
+  # Debug functions
+  #
+  # defp reduce_op_map(op_map) do
+  #   op_map
+  #   |> Enum.reduce([], fn {n_node, op}, acc ->
+  #     case op do
+  #       {:ins, p_node, prev_node} ->
+  #         [{:ins, trim_node(n_node), trim_node(p_node), trim_node(prev_node)} | acc]
+
+  #       {op, o_node} when is_atom(op) ->
+  #         [{op, trim_node(n_node), trim_node(o_node)} | acc]
+
+  #       op when is_atom(op) ->
+  #         [{op, trim_node(n_node)} | acc]
+
+  #       other ->
+  #         [{op, trim_node(n_node), other} | acc]
+  #     end
+  #   end)
+  #   |> Enum.reverse()
+  # end
+
+  # defp trim_node(nil) do
+  #   nil
+  # end
+
+  # defp trim_node(%{} = node) do
+  #   ref_to_xml(node, only: [:id, :type, :label], no_children: true)
+  # end
+
+  # defp ref_to_xml(%{ref: node}, opts) do
+  #   ExSni.XML.Builder.encode!(node, opts)
+  # end
+
+  # defp ref_to_xml(v, opts) do
+  #   ExSni.XML.Builder.encode!(v, opts)
+  # end
 end
