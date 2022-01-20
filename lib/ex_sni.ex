@@ -3,6 +3,7 @@ defmodule ExSni do
 
   alias ExSni.Bus
   alias ExSni.{Icon, Menu}
+  alias ExSni.Debugger
 
   def start_link(init_opts \\ [], start_opts \\ []) do
     Supervisor.start_link(__MODULE__, init_opts, start_opts)
@@ -21,6 +22,8 @@ defmodule ExSni do
         icon: icon,
         menu: menu_server_pid
       }
+
+      Debugger.init()
 
       children = [
         {Registry, keys: :unique, name: ExSniRegistry},

@@ -193,12 +193,30 @@ defmodule ExSni.Menu.Server do
   # Menu queue is empty, so current menu is still valid
   # Return that we want to skip any dbus menu updates
   defp do_menu_update(%{menu_queue: []} = state) do
+    :telemetry.execute([:ex_sni, :do_menu_update], %{}, %{
+      branch: 0,
+      description: "Menu queue is empty, so current menu is still valid",
+      menu_queue: :empty,
+      returns: :skip,
+      new_root: nil,
+      old_root: Menu.get_root(state.menu)
+    })
+
     {:skip, state}
   end
 
   # Current menu is nil and a reset is queued
   # Skip the reset and try again
   defp do_menu_update(%{menu: %Menu{root: nil}, menu_queue: [:reset | menu_queue]} = state) do
+    :telemetry.execute([:ex_sni, :do_menu_update], %{}, %{
+      branch: 1,
+      description: "Current menu is nil and reset is queued. Skip the reset and try again",
+      menu_queue: :reset,
+      returns: :rerun,
+      new_root: :reset,
+      old_root: nil
+    })
+
     state
     |> set_menu_queue(menu_queue)
     |> do_menu_update()
@@ -212,6 +230,16 @@ defmodule ExSni.Menu.Server do
        ) do
     # Increment the version of an empty menu
     menu = %{old_menu | root: nil, version: old_version + 1}
+
+    :telemetry.execute([:ex_sni, :do_menu_update], %{}, %{
+      branch: 2,
+      description:
+        "There is a reset pending, and the current menu is not empty. Action on the reset",
+      menu_queue: :reset,
+      returns: :trigger_layout_update_signal,
+      new_root: nil,
+      old_root: Menu.get_root(old_menu)
+    })
 
     # Update the queue
     # Send a LayoutUpdated signal, so that D-Bus can fetch the new empty menu
@@ -229,8 +257,26 @@ defmodule ExSni.Menu.Server do
            state
        ) do
     if menu_empty?(new_menu) do
+      :telemetry.execute([:ex_sni, :do_menu_update], %{}, %{
+        branch: 3,
+        description: "Current menu is nil, no reset pending and full new empty menu",
+        menu_queue: :empty,
+        returns: :skip,
+        new_root: nil,
+        old_root: nil
+      })
+
       {:skip, set_menu_queue(state, [])}
     else
+      :telemetry.execute([:ex_sni, :do_menu_update], %{}, %{
+        branch: 3,
+        description: "Current menu is nil, no reset pending and full new non-empty menu",
+        menu_queue: :empty,
+        returns: :trigger_layout_update_signale,
+        new_root: Menu.get_root(new_menu),
+        old_root: nil
+      })
+
       menu = %{new_menu | version: old_version + 1}
       # Update the queue
       # Send a LayoutUpdated signal, so that D-Bus can fetch the new empty menu
@@ -249,6 +295,15 @@ defmodule ExSni.Menu.Server do
            menu_queue: [%Menu{root: new_root} = new_menu]
          } = state
        ) do
+    :telemetry.execute([:ex_sni, :do_menu_update], %{}, %{
+      branch: 4,
+      description: "No reset pending, just a possible menu update",
+      menu_queue: :new_root,
+      returns: :menu_diff_result,
+      new_root: new_root,
+      old_root: old_root
+    })
+
     menu_diff = MenuDiff.diff(new_root, old_root)
 
     case menu_diff do
@@ -397,10 +452,20 @@ defmodule ExSni.Menu.Server do
   end
 
   defp send_dbus_signal(service_pid, "LayoutUpdated" = signal, args) do
+    :telemetry.execute([:ex_sni, :send_dbus_signal], %{}, %{
+      signal: "LayoutUpdated",
+      args: args
+    })
+
     service_send_signal(service_pid, signal, {"ui", [:uint32, :int32], args})
   end
 
   defp send_dbus_signal(service_pid, "ItemsPropertiesUpdated" = signal, args) do
+    :telemetry.execute([:ex_sni, :send_dbus_signal], %{}, %{
+      signal: "ItemsPropertiesUpdated",
+      args: args
+    })
+
     service_send_signal(service_pid, signal, {
       "a(ia{sv})a(ias)",
       [
@@ -413,7 +478,6 @@ defmodule ExSni.Menu.Server do
 
   defp service_send_signal(service_pid, signal, args) do
     # IO.inspect([signal, args], label: "Sending D-Bus signal", limit: :infinity)
-
     ExDBus.Service.send_signal(
       service_pid,
       "/MenuBar",
@@ -432,6 +496,11 @@ defmodule ExSni.Menu.Server do
          %{menu: %Menu{version: version} = menu, items_properties_updated_queue: ipu_queue} =
            state
        ) do
+    :telemetry.execute([:ex_sni, :dbus_method, :call], %{}, %{
+      method: "GetLayout",
+      args: {parentId, depth, properties}
+    })
+
     {ipu_item, ipu_queue} = fetch_items_properties_updated(version, ipu_queue)
 
     case ipu_item do
@@ -448,6 +517,11 @@ defmodule ExSni.Menu.Server do
   end
 
   defp handle_method("GetGroupProperties", {ids, properties}, _from, %{menu: menu} = state) do
+    :telemetry.execute([:ex_sni, :dbus_method, :call], %{}, %{
+      method: "GetGroupProperties",
+      args: {ids, properties}
+    })
+
     state = %{state | get_group_properties: {time(state), menu}}
     {:reply, method_reply("GetGroupProperties", {ids, properties}, menu), state}
   end
@@ -492,7 +566,15 @@ defmodule ExSni.Menu.Server do
     #   label: "[#{System.os_time(:millisecond)}] [ExSni][Menu.Server] GetLayout"
     # )
 
-    Menu.get_layout(menu, parentId, depth, properties)
+    result = Menu.get_layout(menu, parentId, depth, properties)
+
+    :telemetry.execute([:ex_sni, :dbus_method, :reply], %{}, %{
+      method: "GetLayout",
+      request: {parentId, depth, properties},
+      response: result
+    })
+
+    result
     # |> IO.inspect(label: "GetLayout reply", limit: :infinity)
   end
 
@@ -503,7 +585,11 @@ defmodule ExSni.Menu.Server do
 
     result = Menu.get_group_properties(menu, ids, properties)
 
-    # |> IO.inspect(label: "GetGroupProperties reply", limit: :infinity)
+    :telemetry.execute([:ex_sni, :dbus_method, :reply], %{}, %{
+      method: "GetGroupProperties",
+      request: {ids, properties},
+      response: result
+    })
 
     {:ok, [{:array, {:struct, [:int32, {:dict, :string, :variant}]}}], [result]}
   end
@@ -686,6 +772,11 @@ defmodule ExSni.Menu.Server do
   end
 
   defp set_current_menu(state, menu) do
+    :telemetry.execute([:ex_sni, :set_current_menu], %{}, %{
+      menu: menu,
+      root: Menu.get_root(menu)
+    })
+
     backup_current_menu(%{state | menu: menu})
   end
 
@@ -717,6 +808,12 @@ defmodule ExSni.Menu.Server do
   end
 
   defp set_menu_queue(state, queue) do
+    :telemetry.execute([:ex_sni, :set_menu_queue], %{}, %{
+      current_menu: state.menu,
+      old_menu_queue: state.menu_queue,
+      new_menu_queue: queue
+    })
+
     %{state | menu_queue: queue}
   end
 
