@@ -53,17 +53,7 @@ defmodule ExSni.Menu.Debug do
         parse_layout_item(child)
       end)
 
-    case properties["children-display"] do
-      "submenu" ->
-        {"menu", [{"id", "#{id}"}], children}
-
-      _ ->
-        if properties["type"] == "separator" do
-          {"hr", [], []}
-        else
-          {"item", [{"id", "#{id}"}], []}
-        end
-    end
+    {"item", [{"id", "#{id}"} | properties], children}
   end
 
   def debug_root(nil) do
@@ -75,8 +65,9 @@ defmodule ExSni.Menu.Debug do
   end
 
   defp parse_properties(properties) do
-    Enum.reduce(properties, %{}, fn {key, {:dbus_variant, _type, value}}, acc ->
-      Map.put(acc, key, "#{value}")
+    Enum.reduce(properties, [], fn {key, {:dbus_variant, _type, value}}, acc ->
+      [{key, "#{value}"} | acc]
     end)
+    |> Enum.reverse()
   end
 end
