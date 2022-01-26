@@ -8,7 +8,7 @@ defmodule ExSni.MixProject do
       app: :ex_sni,
       name: "ExSNI",
       source_url: @source_url,
-      version: "0.2.8",
+      version: "0.2.9",
       elixir: "~> 1.10",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
@@ -40,7 +40,8 @@ defmodule ExSni.MixProject do
 
       # Development dialyzer
       {:dialyxir, "~> 1.1.0", only: [:dev, :test], runtime: false},
-      {:credo, "~> 1.5", only: [:dev, :test], runtime: false}
+      {:credo, "~> 1.5", only: [:dev, :test], runtime: false},
+      {:ex_doc, ">= 0.0.0", only: :dev, runtime: false}
     ]
   end
 
